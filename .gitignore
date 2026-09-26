@@ -12,3 +12,4 @@ venv.bak/
 **/app.db
 .env
 .serena/
+doc/**
