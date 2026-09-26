@@ -13,3 +13,4 @@ venv.bak/
 .env
 .serena/
 doc/**
+**/data/reports/**.pdf
