@@ -32,4 +32,4 @@ MCP 서버는 앱이 필요할 때 `src/` 디렉터리를 작업 위치로 하�
 
 OpenDART HTTP 요청은 `app/callImportantAPI.py`의 `OpenDartImportantClient`에서 처리합니다. 에이전트는 MCP 도구로 이 기능을 사용합니다. CorpCode 동기화 모듈은 같은 클라이언트를 위임 호출하며, 조회와 파싱 외의 DB 동기화는 별도 운영 명령에서 실행합니다.
 
-PDF 결과는 `src/data/reports/`에 저장됩니다. 데이터베이스와 보고서 파일은 실행 데이터이므로 Git에 추가하지 않습니다.
+PDF 결과는 `src/data/reports/`에 저장됩니다. 보고서에는 `app/assets/fonts/NanumGothic-Regular.ttf`를 포함해 Windows와 macOS에서 같은 한글 글꼴로 표시하며, 글꼴 라이선스는 같은 디렉터리의 `OFL.txt`에 있습니다. 데이터베이스와 보고서 파일은 실행 데이터이므로 Git에 추가하지 않습니다.

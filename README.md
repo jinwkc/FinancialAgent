@@ -10,13 +10,13 @@ Streamlit에서 기업명을 입력하면 LangGraph 에이전트가 MCP 도구�
 - 요청 시 재무 상담 PDF 생성 및 다운로드
 - MySQL에 CorpCode 마스터와 동기화 이력 저장
 
-MySQL은 프로젝트와 별도로 실행되는 **사용자 관리 MySQL 8 Docker 컨테이너**를 사용합니다. 저장소에 MySQL Dockerfile 또는 Compose 파일은 없습니다. 이 앱은 조회한 재무제표나 대화 이력을 MySQL에 저장하지 않습니다. B2B 제안서·CRM 기능도 현재 프로젝트 범위에 포함되지 않습니다.
+MySQL은 프로젝트와 별도로 실행되는 **사용자 관리 MySQL 8 Docker 컨테이너**를 사용. 저장소에 MySQL Dockerfile 또는 Compose 파일은 없습니다. 이 앱은 조회한 재무제표나 대화 이력을 MySQL에 저장하지 않는다. B2B 제안서·CRM 기능도 현재 프로젝트 범위에 포함되지 않습니다.
 
 ## 빠른 시작
 
-자세한 MySQL 컨테이너 설정, 데이터베이스 및 테이블 준비, `.env` 구성, 실행 절차는 [실행·환경 설정 안내서](src/md_dir/run_environment_guide.md)를 참고하세요.
+자세한 MySQL 컨테이너 설정, 데이터베이스 및 테이블 준비, `.env` 구성, 실행 절차는 [실행·환경 설정 안내서](src/md_dir/run_environment_guide.md)를 참고.
 
-요약하면 프로젝트 루트에서 다음을 수행합니다.
+요약하면 프로젝트 루트에서 다음을 수행.
 
 ```bash
 python3.12 -m venv .venv
@@ -25,7 +25,7 @@ python -m pip install -r src/requirements.txt
 streamlit run src/app/streamlit_app.py
 ```
 
-실행 전에 프로젝트 루트 `.env`에 `OPENAI_API_KEY`, `DART_API_KEY`(또는 `OPENDART_API_KEY`), `CORP_CODE_DATABASE_URL`을 설정해야 합니다. 실제 키나 암호는 저장소에 넣지 마세요.
+실행 전, 프로젝트 루트 `.env`에 `OPENAI_API_KEY`, `DART_API_KEY`(또는 `OPENDART_API_KEY`), `CORP_CODE_DATABASE_URL`을 설정.
 
 ## 저장소 구성
 
@@ -39,7 +39,7 @@ src/
 └── README.md            # 앱 모듈 설명
 ```
 
-주요 실행 파일은 `src/app/streamlit_app.py`이며, Python 의존성은 `src/requirements.txt`에서 관리합니다. 테스트/기능 점검 스크립트인 `src/test_callImportant.sh`는 OpenDART와 MySQL에 실제 연결할 수 있으므로 실행 시 외부 API 및 DB 사용에 유의하세요. 이전 테스트 기록과 검증 한계는 테스트 계획 및 결과서에 정리되어 있습니다.
+주요 실행 파일은 `src/app/streamlit_app.py`이며, Python 의존성은 `src/requirements.txt`에서 관리. 테스트/기능 점검 스크립트인 `src/test_callImportant.sh`는 OpenDART와 MySQL에 실제 연결할 수 있으므로 실행 시 외부 API 및 DB 사용에 유의. 이전 테스트 기록과 검증 한계는 테스트 계획 및 결과서에 정리 됨.
 
 ## 문서
 

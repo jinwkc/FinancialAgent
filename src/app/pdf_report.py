@@ -6,6 +6,7 @@ import os
 import re
 import uuid
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
 
@@ -22,14 +23,8 @@ LEFT_MARGIN = 48
 RIGHT_MARGIN = 48
 TOP_MARGIN = 48
 BOTTOM_MARGIN = 56
-FONT_NAME = "korea"
-_FONT_CANDIDATES = (
-    Path("/System/Library/Fonts/AppleSDGothicNeo.ttc"),
-    Path("/System/Library/Fonts/Supplemental/Arial Unicode.ttf"),
-)
-FONT_FILE = next((path for path in _FONT_CANDIDATES if path.is_file()), None)
-if FONT_FILE:
-    FONT_NAME = "reportko"
+FONT_NAME = "nanumgothic"
+FONT_FILE = Path(__file__).resolve().parent / "assets" / "fonts" / "NanumGothic-Regular.ttf"
 CONTENT_WIDTH = PAGE_WIDTH - LEFT_MARGIN - RIGHT_MARGIN
 CONTENT_BOTTOM = PAGE_HEIGHT - BOTTOM_MARGIN - 18
 
@@ -45,13 +40,40 @@ WHITE = (1.0, 1.0, 1.0)
 BORDER = (0.86, 0.89, 0.92)
 
 
+@lru_cache(maxsize=1)
+def _report_font() -> fitz.Font:
+    """Use the same bundled font for layout measurements and PDF drawing."""
+    return fitz.Font(fontfile=str(FONT_FILE))
+
+
+def _fit_single_line(
+    text: str, max_width: float, font_size: float, min_size: float
+) -> tuple[str, float, bool]:
+    """Fit a header label into its fixed area and report any omitted text."""
+    value = " ".join(text.split())
+    font = _report_font()
+    while font_size > min_size and font.text_length(value, fontsize=font_size) > max_width:
+        font_size = max(min_size, font_size - 0.5)
+    if font.text_length(value, fontsize=font_size) <= max_width:
+        return value, font_size, False
+
+    low, high = 0, len(value)
+    while low < high:
+        middle = (low + high + 1) // 2
+        if font.text_length(value[:middle].rstrip() + "…", fontsize=font_size) <= max_width:
+            low = middle
+        else:
+            high = middle - 1
+    return value[:low].rstrip() + "…", font_size, True
+
+
 def _wrap_paragraph(
     text: str,
     max_width: float = CONTENT_WIDTH,
     font_size: float = 10.5,
 ) -> list[str]:
     """문자 수가 아니라 실제 한글 글꼴 폭을 기준으로 문단을 줄바꿈한다."""
-    font = fitz.Font(fontfile=str(FONT_FILE)) if FONT_FILE else fitz.Font(fontname=FONT_NAME)
+    font = _report_font()
     lines: list[str] = []
     for source_line in text.splitlines() or [text]:
         remaining = source_line.strip()
@@ -124,6 +146,15 @@ def generate_financial_report_pdf(
     if not company_name.strip():
         raise ValueError("company_name이 필요합니다.")
 
+    _report_font()  # Fail clearly if the bundled font is missing or unreadable.
+    title_text, title_size, title_shortened = _fit_single_line(
+        company_name, CONTENT_WIDTH, 23, 11
+    )
+    period_value = report_period or "보고서 기준 정보 없음"
+    period_text, period_size, period_shortened = _fit_single_line(
+        period_value, CONTENT_WIDTH, 9, 7
+    )
+
     report_id = uuid.uuid4().hex
     filename = f"{_safe_company_slug(company_name)}_financial_report_{report_id[:8]}.pdf"
     output_path = REPORT_DIR / f"{report_id}.pdf"
@@ -131,8 +162,7 @@ def generate_financial_report_pdf(
 
     document = fitz.open()
     page = document.new_page(width=PAGE_WIDTH, height=PAGE_HEIGHT)
-    if FONT_FILE:
-        page.insert_font(fontname=FONT_NAME, fontfile=str(FONT_FILE))
+    page.insert_font(fontname=FONT_NAME, fontfile=str(FONT_FILE))
     y = TOP_MARGIN
 
     def draw_page_header(*, first_page: bool = False) -> None:
@@ -145,24 +175,26 @@ def generate_financial_report_pdf(
                 fontsize=8.5, fontname=FONT_NAME, color=(0.79, 0.86, 0.94),
             )
             page.insert_text(
-                (LEFT_MARGIN, 78), company_name,
-                fontsize=23, fontname=FONT_NAME, color=WHITE,
+                (LEFT_MARGIN, 78), title_text,
+                fontsize=title_size, fontname=FONT_NAME, color=WHITE,
             )
             page.insert_text(
                 (LEFT_MARGIN, 105), "재무제표 요약 보고서",
                 fontsize=13, fontname=FONT_NAME, color=(0.89, 0.93, 0.97),
             )
-            page.insert_textbox(
-                fitz.Rect(LEFT_MARGIN, 119, PAGE_WIDTH - RIGHT_MARGIN, 145),
-                report_period or "보고서 기준 정보 없음",
-                fontsize=9, fontname=FONT_NAME, color=(0.79, 0.86, 0.94),
+            page.insert_text(
+                (LEFT_MARGIN, 135), period_text,
+                fontsize=period_size, fontname=FONT_NAME, color=(0.79, 0.86, 0.94),
             )
             y = 181
         else:
             page.draw_rect(fitz.Rect(0, 0, PAGE_WIDTH, 49), color=PALE_GRAY, fill=PALE_GRAY)
+            short_name, short_size, _ = _fit_single_line(
+                company_name, CONTENT_WIDTH - 165, 10, 8
+            )
             page.insert_text(
-                (LEFT_MARGIN, 30), company_name,
-                fontsize=10, fontname=FONT_NAME, color=NAVY,
+                (LEFT_MARGIN, 30), short_name,
+                fontsize=short_size, fontname=FONT_NAME, color=NAVY,
             )
             page.insert_text(
                 (PAGE_WIDTH - RIGHT_MARGIN - 150, 30), "재무제표 요약 보고서",
@@ -173,8 +205,7 @@ def generate_financial_report_pdf(
     def add_page() -> None:
         nonlocal page
         page = document.new_page(width=PAGE_WIDTH, height=PAGE_HEIGHT)
-        if FONT_FILE:
-            page.insert_font(fontname=FONT_NAME, fontfile=str(FONT_FILE))
+        page.insert_font(fontname=FONT_NAME, fontfile=str(FONT_FILE))
         draw_page_header()
 
     def ensure_room(height: float) -> None:
@@ -183,7 +214,7 @@ def generate_financial_report_pdf(
 
     def draw_section_heading(title: str, color: tuple[float, float, float] = BLUE) -> None:
         nonlocal y
-        ensure_room(38)
+        ensure_room(85)  # Keep the heading with the first line of its content.
         page.draw_rect(
             fitz.Rect(LEFT_MARGIN, y, LEFT_MARGIN + 4, y + 21),
             color=color,
@@ -207,7 +238,8 @@ def generate_financial_report_pdf(
         nonlocal y
         content = text.strip() or "대화에서 확인된 내용이 없습니다."
         leading = line_height or font_size * 1.65
-        lines = _wrap_paragraph(content, CONTENT_WIDTH - 32, font_size)
+        text_width = CONTENT_WIDTH - 34 if background else CONTENT_WIDTH
+        lines = _wrap_paragraph(content, text_width, font_size)
         line_index = 0
 
         while line_index < len(lines):
@@ -223,7 +255,7 @@ def generate_financial_report_pdf(
                     fitz.Rect(LEFT_MARGIN, y, PAGE_WIDTH - RIGHT_MARGIN, y + box_height),
                     color=background,
                     fill=background,
-                    radius=0.08,
+                    radius=0.02,
                 )
                 if accent:
                     page.draw_rect(
@@ -263,6 +295,13 @@ def generate_financial_report_pdf(
                 )
                 card_data.append((label_lines, value_lines, comparison_lines, max(78, content_height)))
             card_height = max(item[3] for item in card_data)
+            if card_height + 10 > CONTENT_BOTTOM - 69:
+                for label, value, comparison in metrics[index:index + 2]:
+                    detail = f"{label}: {value}"
+                    if comparison:
+                        detail += f"\n{comparison}"
+                    draw_paragraph(detail, background=PALE_GRAY)
+                continue
             ensure_room(card_height + 10)
 
             for column, (label_lines, value_lines, comparison_lines, _) in enumerate(card_data):
@@ -294,6 +333,10 @@ def generate_financial_report_pdf(
             y += card_height + 10
 
     draw_page_header(first_page=True)
+    if title_shortened:
+        draw_paragraph(f"대상 기업: {company_name}")
+    if period_shortened:
+        draw_paragraph(f"보고서 기준: {period_value}")
 
     draw_section_heading("핵심 요약")
     draw_paragraph(
