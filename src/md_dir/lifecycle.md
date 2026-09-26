@@ -97,8 +97,8 @@ MCP 서버의 lifespan은 서버 시작·종료에 맞춰 자원을 준비하고
 - `app/streamlit_app.py`: 캐시된 에이전트를 만들고 사용자 입력마다 실행합니다.
 - `app/agent.py`: stdio MCP 연결을 설정하고 도구를 LangGraph에 등록합니다.
 - `app/mcp_server.py`: MCP 서버의 실행 진입점입니다.
-- `app/mcp_tools.py`: 재무 조회 MCP 도구에서 `callImportant.py`를 호출합니다.
-- `app/callImportant.py`: 회사명 조회 후 OpenDART 데이터를 수집합니다.
+- `app/mcp_tools.py`: 재무 조회 MCP 도구에서 `callImportantAPI.py`를 호출합니다.
+- `app/callImportantAPI.py`: 회사명 조회 후 OpenDART 데이터를 수집합니다.
 - `app/corp_code_sync.py`: MySQL 엔진·세션을 만들고 CorpCode 조회 및 동기화를 수행합니다.
 
 ## 참고

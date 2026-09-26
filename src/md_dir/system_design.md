@@ -61,7 +61,7 @@ flowchart TB
         Tool[mcp_tools.py<br/>재무 조회 · JSON API · PDF 도구]
     end
     subgraph Services[서비스]
-        OpenDart[callImportant.py<br/>HTTP · 보고서 선택 · 응답 정규화]
+        OpenDart[callImportantAPI.py<br/>HTTP · 보고서 선택 · 응답 정규화]
         Corp[corp_code_sync.py<br/>MySQL CorpCode 검색·동기화]
         Pdf[ pdf_report.py<br/>PDF 레이아웃·파일 저장]
     end
@@ -81,7 +81,7 @@ flowchart TB
 | `app/prompts.py` | 설명 수준과 재무 응답 지침 구성 | 수준 ID → 시스템 프롬프트 |
 | `app/mcp_server.py` | FastMCP를 stdio 전송으로 실행하는 진입점 | MCP JSON-RPC 요청·응답 |
 | `app/mcp_tools.py` | 모델에 노출할 도구 계약과 입력 검증 | 문자열/JSON 입력 → 조회 JSON 또는 PDF 토큰 |
-| `app/callImportant.py` | OpenDART HTTP 호출, 보고서 조회, 응답 정규화 및 메타데이터 결합 | JSON/ZIP API 응답 → Python 자료구조 |
+| `app/callImportantAPI.py` | OpenDART HTTP 호출, 보고서 조회, 응답 정규화 및 메타데이터 결합 | JSON/ZIP API 응답 → Python 자료구조 |
 | `app/corp_code_sync.py` | CorpCode ZIP 파싱, MySQL 엔진·세션, 기업명 검색·동기화 | 회사명·동기화 명령 ↔ MySQL |
 | `app/pdf_report.py` | 페이지·한글 폰트·요약·지표 카드·출처를 PDF로 구성 | 보고서 필드 → 로컬 PDF 및 다운로드 토큰 |
 
@@ -166,7 +166,7 @@ finalproject/
 │   │   ├── prompts.py           # 재무 상담 지침
 │   │   ├── mcp_server.py        # stdio MCP 서버 진입점
 │   │   ├── mcp_tools.py         # 모델 도구 인터페이스
-│   │   ├── callImportant.py     # OpenDART API·정규화
+│   │   ├── callImportantAPI.py     # OpenDART API·정규화
 │   │   ├── corp_code_sync.py    # MySQL CorpCode 저장·검색·동기화
 │   │   └── pdf_report.py        # PDF 파일 생성
 │   ├── sql/

@@ -4,14 +4,14 @@
 
 ## 1. 정기보고서 검색이 공시 첫 페이지에 한정됨
 
-- 위치: `app/callImportant.py`의 `get_periodic_reports()`
+- 위치: `app/callImportantAPI.py`의 `get_periodic_reports()`
 - 현재 동작: 2015년부터 현재까지의 공시를 `page_no=1`, `page_count=100`으로 한 번 조회한 뒤, 그 100건에서 정기보고서를 골라 최신순으로 정렬한다.
 - 영향: 첫 페이지에 필요한 정기보고서가 없으면 실제 공시가 존재해도 결과에서 누락된다. 과거 보고서를 여러 건 요청할수록 가능성이 커진다.
 - 보완 방향: 정기보고서를 요청 개수만큼 확보할 때까지 다음 페이지를 조회하고, 더 이상 페이지가 없을 때 종료한다. 조회 범위와 페이지 수에는 상한을 둔다.
 
 ## 2. 요청 가능한 보고서 수에 상한이 없음
 
-- 위치: `app/mcp_tools.py`의 `get_company_financial_data()`와 `app/callImportant.py`의 동명 메서드
+- 위치: `app/mcp_tools.py`의 `get_company_financial_data()`와 `app/callImportantAPI.py`의 동명 메서드
 - 현재 동작: `history_count`가 1 이상인지 확인하지만 최대값은 제한하지 않는다. 각 보고서에 대해 주요계정, 네 종류의 재무지표, 전체 재무제표를 병렬 요청한다.
 - 영향: 큰 값을 전달하면 OpenDART 요청 수, 응답 크기, 모델에 전달되는 도구 결과가 함께 커진다. 응답 지연이나 API 한도 초과로 이어질 수 있다.
 - 보완 방향: 제품에서 허용할 최대 보고서 수와 동시 요청 수를 정하고, 초과 입력을 도구 경계에서 거절한다. 모델에 전달할 데이터도 질문에 필요한 범위로 줄인다.
@@ -32,7 +32,7 @@
 
 ## 5. 반기 현금흐름표 금액이 정규화 결과에서 누락됨
 
-- 위치: `app/callImportant.py`의 `normalize_account_item()`
+- 위치: `app/callImportantAPI.py`의 `normalize_account_item()`
 - 현재 동작: 사업보고서가 아닌 재무상태표·자본변동표 외 항목에는 모두 `thstrm_add_amount`를 선택한다.
 - 확인 결과: 2026년 9월 23일 삼성전자 2026년 반기 연결 재무제표의 `fnlttSinglAcntAll.json` 응답은 현금흐름표(`CF`) 39개 항목에 `thstrm_amount`를 제공했으나 `thstrm_add_amount`는 한 항목에도 없었다. 현재 정규화 결과에서는 39개 항목의 선택 금액이 모두 누락됐다.
 - 영향: 에이전트가 원본 필드를 직접 해석하지 않으면 현금흐름 분석을 빠뜨릴 수 있다. 다른 회사·보고서에서도 같은 필드 구성이 나타나는지는 추가 확인이 필요하다.
@@ -48,6 +48,6 @@
 ## 7. 프로젝트 API 목록의 일부 엔드포인트 이름이 공식 문서와 다름
 
 - 위치: `ImportantList.md`의 `document.json`, `APIList.md`의 `fnlttMultiIndx.json`
-- 확인 결과: OpenDART 공식 개발가이드는 공시 원문 다운로드를 `document.xml`, 다중회사 주요 재무지표를 `fnlttCmpnyIndx.json`으로 안내한다. 현재 `app/callImportant.py`는 이 공식 엔드포인트를 우선 사용한다.
+- 확인 결과: OpenDART 공식 개발가이드는 공시 원문 다운로드를 `document.xml`, 다중회사 주요 재무지표를 `fnlttCmpnyIndx.json`으로 안내한다. 현재 `app/callImportantAPI.py`는 이 공식 엔드포인트를 우선 사용한다.
 - 영향: 문서의 이름을 그대로 복사해 별도 호출 코드를 만들면 API 오류나 불필요한 재시도가 발생할 수 있다.
 - 보완 방향: 프로젝트 API 목록을 공식 엔드포인트 이름과 응답 형식에 맞게 정정한다.

@@ -28,7 +28,7 @@ ROOT = Path.cwd()
 load_dotenv(ROOT / ".env")
 sys.path.insert(0, str(ROOT / "src"))
 
-from app.callImportant import OpenDartApiError, get_company_financial_data
+from app.callImportantAPI import OpenDartApiError, get_company_financial_data
 
 
 parser = argparse.ArgumentParser(

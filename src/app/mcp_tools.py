@@ -14,7 +14,7 @@ from mcp.server.fastmcp import FastMCP
 _PROJECT_ROOT = _Path(__file__).resolve().parents[2]
 _load_dotenv(_PROJECT_ROOT / ".env")
 
-from app.callImportant import (
+from app.callImportantAPI import (
     OpenDartImportantClient,
     get_company_financial_data as _fetch_company_financial_data,
 )
@@ -48,7 +48,7 @@ async def get_company_financial_data(
 
 @mcp.tool()
 async def call_important_api(endpoint: str, params: dict[str, str] | None = None) -> str:
-    """callImportant.py의 OpenDART JSON API 호출 함수를 MCP 도구로 제공한다."""
+    """callImportantAPI.py의 OpenDART JSON API 호출 함수를 MCP 도구로 제공한다."""
     async with OpenDartImportantClient() as client:
         result = await client.call_json_api(endpoint, params)
     return _json.dumps(result, ensure_ascii=False, default=str)

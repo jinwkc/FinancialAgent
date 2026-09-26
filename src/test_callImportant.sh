@@ -14,7 +14,7 @@ fi
 
 cd "$PROJECT_ROOT"
 exec "$PYTHON_BIN" - "$@" <<'PY'
-"""callImportant.py의 순수 함수와 실제 OpenDART/CorpCode 호출을 점검한다."""
+"""callImportantAPI.py의 순수 함수와 실제 OpenDART/CorpCode 호출을 점검한다."""
 
 import argparse
 import asyncio
@@ -29,10 +29,10 @@ ROOT = Path.cwd()
 load_dotenv(ROOT / ".env")
 sys.path.insert(0, str(ROOT / "src"))
 
-from app import callImportant as api
+from app import callImportantAPI as api
 
 
-parser = argparse.ArgumentParser(description="callImportant.py 모든 함수 실행 점검")
+parser = argparse.ArgumentParser(description="callImportantAPI.py 모든 함수 실행 점검")
 parser.add_argument(
     "--company-name",
     default="삼성전자",

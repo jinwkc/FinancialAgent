@@ -217,7 +217,7 @@ PDF 지표는 한 줄마다 `지표명 | 현재값과 단위 | 비교값과 비�
 ## 10. 관련 코드와 문서
 
 - [`app/corp_code_sync.py`](app/corp_code_sync.py): MySQL ORM, 연결 문자열, CorpCode 검색·동기화
-- [`app/callImportant.py`](app/callImportant.py): OpenDART 엔드포인트, API 호출, 재무 응답 조합·정규화
+- [`app/callImportantAPI.py`](../app/callImportantAPI.py): OpenDART 엔드포인트, API 호출, 재무 응답 조합·정규화
 - [`app/mcp_tools.py`](app/mcp_tools.py): 모델에 노출되는 MCP 요청·응답 계약
 - [`app/pdf_report.py`](app/pdf_report.py): PDF 입력 필드와 파일 저장
 - [`app/agent.py`](app/agent.py), [`app/streamlit_app.py`](app/streamlit_app.py): 호출 흐름과 UI 세션

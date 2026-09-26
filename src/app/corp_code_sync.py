@@ -109,13 +109,13 @@ def get_api_key() -> str:
 
 
 def download_corp_code_zip(api_key: str, timeout: float = 30.0) -> bytes:
-    """동기 호환 래퍼도 callImportant.py를 통해 ZIP을 내려받는다."""
+    """동기 호환 래퍼도 callImportantAPI.py를 통해 ZIP을 내려받는다."""
     return asyncio.run(async_download_corp_code_zip(api_key, timeout))
 
 
 async def async_download_corp_code_zip(api_key: str, timeout: float = 30.0) -> bytes:
     """CorpCode ZIP 호출을 공통 OpenDART API 클라이언트에 위임한다."""
-    from app.callImportant import OpenDartImportantClient
+    from app.callImportantAPI import OpenDartImportantClient
 
     async with OpenDartImportantClient(api_key=api_key, timeout=timeout) as client:
         return await client.get_corp_code_zip()
@@ -435,7 +435,7 @@ async def async_get_company_json(
 
     if len(corp_code) != 8 or not corp_code.isdigit():
         raise ValueError("corp_code는 숫자 8자리여야 합니다.")
-    from app.callImportant import OpenDartImportantClient
+    from app.callImportantAPI import OpenDartImportantClient
 
     async with OpenDartImportantClient(api_key=api_key or get_api_key(), timeout=timeout) as client:
         return await client.call_json_api("company.json", {"corp_code": corp_code})

@@ -146,7 +146,7 @@ flowchart TD
 - [`app/streamlit_app.py`](app/streamlit_app.py): UI 및 세션 동작
 - [`app/agent.py`](app/agent.py): LangGraph와 MCP 연결
 - [`app/mcp_tools.py`](app/mcp_tools.py): 모델 도구의 입력·출력
-- [`app/callImportant.py`](app/callImportant.py): OpenDART 수집·정규화
+- [`app/callImportantAPI.py`](../app/callImportantAPI.py): OpenDART 수집·정규화
 - [`app/corp_code_sync.py`](app/corp_code_sync.py): MySQL CorpCode 저장·검색·동기화
 - [`app/pdf_report.py`](app/pdf_report.py): PDF 파일 생성
 - [`tests/test_financial_chatbot.py`](tests/test_financial_chatbot.py): 오프라인 단위 테스트 코드
