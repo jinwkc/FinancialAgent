@@ -75,7 +75,12 @@ class FinancialMCPToolTests(unittest.IsolatedAsyncioTestCase):
 
         async def fake_fetch(**kwargs):
             forwarded.append(kwargs)
-            return {"company_name": kwargs["company_name"], "reports": ["latest"]}
+            # _minimize_financial_payload가 reports의 각 항목을 딕셔너리로 다루므로
+            # 실제 반환 구조(딕셔너리 리스트)에 맞춘 최소 형태를 사용한다.
+            return {
+                "company_name": kwargs["company_name"],
+                "reports": [{"report_nm": "latest"}],
+            }
 
         with patch("app.mcp_tools._fetch_company_financial_data", new=fake_fetch):
             result = await tool("삼성전자", history_count=2, fs_div="OFS")
@@ -84,7 +89,15 @@ class FinancialMCPToolTests(unittest.IsolatedAsyncioTestCase):
             forwarded,
             [{"company_name": "삼성전자", "history_count": 2, "fs_div": "OFS"}],
         )
-        self.assertEqual(json.loads(result), {"company_name": "삼성전자", "reports": ["latest"]})
+        self.assertEqual(
+            json.loads(result),
+            {
+                "company_name": "삼성전자",
+                "reports": [
+                    {"report_nm": "latest", "normalized_accounts": [], "normalized_indices": {}}
+                ],
+            },
+        )
 
     async def test_company_name_tool_rejects_invalid_query_options(self) -> None:
         tool = mcp_tools.get_company_financial_data
@@ -145,8 +158,51 @@ class FinancialMCPToolTests(unittest.IsolatedAsyncioTestCase):
 
         payload = json.loads(raw_result)
         self.assertIsNone(payload["company_detail"])
-        self.assertIsNone(payload["reports"][0]["accounts"])
-        self.assertEqual(payload["reports"][0]["accounts_all"], {"status": "000", "list": []})
+        # _minimize_financial_payload가 raw payload(accounts/accounts_all/indices)를
+        # LLM 응답에서 제거하므로 더 이상 존재하지 않아야 한다.
+        report_payload = payload["reports"][0]
+        self.assertNotIn("accounts", report_payload)
+        self.assertNotIn("accounts_all", report_payload)
+        self.assertNotIn("indices", report_payload)
+        self.assertIn("normalized_accounts", report_payload)
+        self.assertIn("normalized_indices", report_payload)
+
+    def test_minimize_financial_payload_drops_raw_data_and_duplicate_source(self) -> None:
+        """_minimize_financial_payload가 raw payload와 항목별 중복 source를 제거하는지 확인한다."""
+        source = {"corp_code": "00126380", "bsns_year": "2023", "rcept_no": "20240101000001"}
+        result = {
+            "company": {"corp_code": "00126380"},
+            "company_detail": None,
+            "reports": [
+                {
+                    "report": {"bsns_year": "2023"},
+                    "accounts": {"status": "000", "list": [{"account_nm": "자산총계"}]},
+                    "accounts_all": {"status": "000", "list": [{"account_nm": "자산총계"}]},
+                    "indices": {"profitability": {"status": "000", "list": []}},
+                    "normalized_accounts": [
+                        {"account_nm": "자산총계", "amount": "100", "source": source}
+                    ],
+                    "normalized_indices": {
+                        "profitability": [
+                            {"idx_nm": "영업이익률", "value": "10", "source": source}
+                        ]
+                    },
+                    "source": source,
+                }
+            ],
+        }
+
+        trimmed = mcp_tools._minimize_financial_payload(result)
+        report_payload = trimmed["reports"][0]
+
+        self.assertNotIn("accounts", report_payload)
+        self.assertNotIn("accounts_all", report_payload)
+        self.assertNotIn("indices", report_payload)
+        self.assertNotIn("source", report_payload["normalized_accounts"][0])
+        self.assertNotIn("source", report_payload["normalized_indices"]["profitability"][0])
+        # report 단위 메타데이터(report, source)는 그대로 보존되어야 한다.
+        self.assertEqual(report_payload["source"], source)
+        self.assertEqual(report_payload["normalized_accounts"][0]["amount"], "100")
 
 
 class OpenDartMinimalApiCallTests(unittest.IsolatedAsyncioTestCase):

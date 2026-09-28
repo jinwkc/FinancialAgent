@@ -23,6 +23,34 @@ from app.pdf_report import generate_financial_report_pdf
 mcp = FastMCP("opendart-financial-assistant", json_response=True)
 
 
+# 추가: LLM에게 보내는 응답 크기(토큰)를 줄이기 위한 후처리 헬퍼.
+# callImportantAPI.py의 원본 구조(raw 응답 + report 단위 source)는 그대로 두고,
+# 여기서만 report별 raw payload(accounts/accounts_all/indices)와 계정·지표
+# 항목마다 중복 저장되던 source 메타데이터(corp_code, bsns_year, rcept_no 등,
+# 같은 report 안에서는 어차피 동일한 값)를 제거한다.
+_RAW_REPORT_KEYS = ("accounts", "accounts_all", "indices")
+
+
+def _minimize_financial_payload(result: dict) -> dict:
+    """LLM 전달 직전 raw 원본과 계정·지표별 중복 source를 제거해 토큰을 줄인다."""
+    trimmed_reports = []
+    for report in result.get("reports", []):
+        trimmed = {key: value for key, value in report.items() if key not in _RAW_REPORT_KEYS}
+        trimmed["normalized_accounts"] = [
+            {key: value for key, value in row.items() if key != "source"}
+            for row in trimmed.get("normalized_accounts", [])
+        ]
+        trimmed["normalized_indices"] = {
+            category: [
+                {key: value for key, value in row.items() if key != "source"}
+                for row in rows
+            ]
+            for category, rows in trimmed.get("normalized_indices", {}).items()
+        }
+        trimmed_reports.append(trimmed)
+    return {**result, "reports": trimmed_reports}
+
+
 @mcp.tool()
 async def get_company_financial_data(
     company_name: str,
@@ -43,7 +71,10 @@ async def get_company_financial_data(
         history_count=history_count,
         fs_div=fs_div,
     )
-    return _json.dumps(result, ensure_ascii=False, default=str)
+    # 기존 코드(주석 보존): raw 응답과 중복 source를 그대로 포함해 직렬화했다.
+    # return _json.dumps(result, ensure_ascii=False, default=str)
+    # 변경: LLM에게 보내는 JSON에서만 raw payload/중복 source를 제거한다.
+    return _json.dumps(_minimize_financial_payload(result), ensure_ascii=False, default=str)
 
 
 @mcp.tool()
