@@ -552,12 +552,16 @@ class OpenDartImportantClient:
         reports = await self.get_periodic_reports(corp_code, history_count)
 
         async def collect(report: dict[str, Any]) -> dict[str, Any]:
-            """한 보고서에 대한 재무 API 세 가지를 병렬 수집한다."""
+            """한 보고서에 대한 재무 API(지표·전체재무제표)를 병렬 수집한다."""
 
             report_code = report["reprt_code"]
             year = report["bsns_year"]
-            accounts, indices, accounts_all = await asyncio.gather(
-                self.get_single_accounts(corp_code, year, report_code),
+            # 최소 API 호출: fnlttSinglAcnt.json(주요계정)은 fnlttSinglAcntAll.json과
+            # 내용이 중복되고, normalize_account_item도 accounts_all만 사용하므로 생략한다.
+            # 필요하면 아래 줄의 주석을 해제해 다시 호출한다.
+            # accounts = await self.get_single_accounts(corp_code, year, report_code)
+            accounts = None
+            indices, accounts_all = await asyncio.gather(
                 asyncio.gather(
                     *(
                         self.get_single_indices(
@@ -604,7 +608,11 @@ class OpenDartImportantClient:
             }
 
         report_data = await asyncio.gather(*(collect(report) for report in reports))
-        company_detail = await self.get_company(corp_code)
+        # 최소 API 호출: 기업명·종목코드 등 식별 정보는 resolve_company_name()에서
+        # CorpCode DB로 이미 확보했으므로 company.json 호출을 생략한다.
+        # 대표자·업종·결산월 등 회사 개요가 필요하면 아래 줄의 주석을 해제한다.
+        # company_detail = await self.get_company(corp_code)
+        company_detail = None
         return {
             "company": company,
             "company_detail": company_detail,

@@ -94,6 +94,116 @@ class FinancialMCPToolTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             await tool("삼성전자", history_count=1, fs_div="INVALID")
 
+    async def test_tool_end_to_end_uses_minimal_api_calls_and_serializes_none_fields(
+        self,
+    ) -> None:
+        """mcp_tools 진입점에서 실제 callImportantAPI 경로까지 최소 API 정책이 유지되는지 확인한다."""
+        from app.callImportantAPI import OpenDartImportantClient
+
+        fake_report = {
+            "rcept_no": "20240101000001",
+            "report_nm": "2023사업보고서",
+            "rcept_dt": "20240101",
+            "reprt_code": "11011",
+            "bsns_year": "2023",
+        }
+
+        async def fake_resolve_company_name(self, company_name, database_url=None, limit=10):
+            return {"corp_code": "00126380", "corp_name": company_name}
+
+        async def fake_get_periodic_reports(self, corp_code, history_count=1, database_url=None):
+            return [fake_report]
+
+        async def fake_get_single_indices(self, corp_code, bsns_year, reprt_code, idx_cl_code):
+            return {"status": "000", "list": []}
+
+        async def fake_get_single_accounts_all(self, corp_code, bsns_year, reprt_code, fs_div):
+            return {"status": "000", "list": []}
+
+        single_accounts_calls: list[tuple[str, str, str]] = []
+        company_calls: list[str] = []
+
+        async def spy_get_single_accounts(self, corp_code, bsns_year, reprt_code):
+            single_accounts_calls.append((corp_code, bsns_year, reprt_code))
+            return {"status": "000", "list": []}
+
+        async def spy_get_company(self, corp_code):
+            company_calls.append(corp_code)
+            return {"status": "000", "corp_name": "테스트"}
+
+        with patch.dict(os.environ, {"DART_API_KEY": "offline-test-key"}), \
+                patch.object(OpenDartImportantClient, "resolve_company_name", new=fake_resolve_company_name), \
+                patch.object(OpenDartImportantClient, "get_periodic_reports", new=fake_get_periodic_reports), \
+                patch.object(OpenDartImportantClient, "get_single_indices", new=fake_get_single_indices), \
+                patch.object(OpenDartImportantClient, "get_single_accounts_all", new=fake_get_single_accounts_all), \
+                patch.object(OpenDartImportantClient, "get_single_accounts", new=spy_get_single_accounts), \
+                patch.object(OpenDartImportantClient, "get_company", new=spy_get_company):
+            raw_result = await mcp_tools.get_company_financial_data("테스트기업")
+
+        self.assertEqual(single_accounts_calls, [])
+        self.assertEqual(company_calls, [])
+
+        payload = json.loads(raw_result)
+        self.assertIsNone(payload["company_detail"])
+        self.assertIsNone(payload["reports"][0]["accounts"])
+        self.assertEqual(payload["reports"][0]["accounts_all"], {"status": "000", "list": []})
+
+
+class OpenDartMinimalApiCallTests(unittest.IsolatedAsyncioTestCase):
+    """최소 API 호출 정책(get_single_accounts/get_company 생략)을 검증한다."""
+
+    async def test_get_company_financial_data_skips_single_accounts_and_company_calls(
+        self,
+    ) -> None:
+        from app.callImportantAPI import OpenDartImportantClient
+
+        client = OpenDartImportantClient(api_key="offline-test-key")
+
+        fake_report = {
+            "rcept_no": "20240101000001",
+            "report_nm": "2023사업보고서",
+            "rcept_dt": "20240101",
+            "reprt_code": "11011",
+            "bsns_year": "2023",
+        }
+
+        async def fake_resolve_company_name(company_name, database_url=None, limit=10):
+            return {"corp_code": "00126380", "corp_name": company_name}
+
+        async def fake_get_periodic_reports(corp_code, history_count=1, database_url=None):
+            return [fake_report]
+
+        async def fake_get_single_indices(corp_code, bsns_year, reprt_code, idx_cl_code):
+            return {"status": "000", "list": []}
+
+        async def fake_get_single_accounts_all(corp_code, bsns_year, reprt_code, fs_div):
+            return {"status": "000", "list": []}
+
+        single_accounts_calls: list[tuple[str, str, str]] = []
+        company_calls: list[str] = []
+
+        async def spy_get_single_accounts(corp_code, bsns_year, reprt_code):
+            single_accounts_calls.append((corp_code, bsns_year, reprt_code))
+            return {"status": "000", "list": []}
+
+        async def spy_get_company(corp_code):
+            company_calls.append(corp_code)
+            return {"status": "000", "corp_name": "테스트"}
+
+        with patch.object(client, "resolve_company_name", new=fake_resolve_company_name), \
+                patch.object(client, "get_periodic_reports", new=fake_get_periodic_reports), \
+                patch.object(client, "get_single_indices", new=fake_get_single_indices), \
+                patch.object(client, "get_single_accounts_all", new=fake_get_single_accounts_all), \
+                patch.object(client, "get_single_accounts", new=spy_get_single_accounts), \
+                patch.object(client, "get_company", new=spy_get_company):
+            result = await client.get_company_financial_data(company_name="테스트기업")
+
+        self.assertEqual(single_accounts_calls, [])
+        self.assertEqual(company_calls, [])
+        self.assertIsNone(result["reports"][0]["accounts"])
+        self.assertIsNone(result["company_detail"])
+        self.assertEqual(result["reports"][0]["accounts_all"], {"status": "000", "list": []})
+
 
 class FinancialPDFTests(unittest.TestCase):
     def test_report_contains_korean_text_and_download_token(self) -> None:
