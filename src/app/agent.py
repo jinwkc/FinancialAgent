@@ -22,7 +22,8 @@ load_dotenv(_PROJECT_ROOT / ".env")
 if str(_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(_SRC_DIR))
 
-from app.prompts import build_financial_system_prompt
+# from app.prompts import build_financial_system_prompt
+from app.compressed_prompts import build_financial_system_prompt
 
 
 class AgentState(TypedDict):

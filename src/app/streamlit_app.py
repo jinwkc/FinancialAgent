@@ -19,7 +19,9 @@ if str(SRC_DIR) not in sys.path:
 
 from app.agent import create_financial_agent_graph
 from app.pdf_report import REPORT_DIR
-from app.prompts import UNDERSTANDING_LEVELS
+# from app.prompts import UNDERSTANDING_LEVELS
+from app.compressed_prompts import UNDERSTANDING_LEVELS
+
 
 
 st.set_page_config(page_title="OpenDART 재무 요약 챗봇", page_icon="📊", layout="wide")
