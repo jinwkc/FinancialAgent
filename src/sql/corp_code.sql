@@ -1,5 +1,5 @@
--- OpenDART corpCode 마스터 데이터를 저장하기 위한 MySQL 스키마
--- 현재 실행 중인 MySQL 컨테이너(root 계정)의 dart 데이터베이스를 대상으로 한다.
+-- OpenDART CorpCode 마스터용 MySQL 스키마
+-- 현재 MySQL 컨테이너의 dart 데이터베이스 대상
 
 CREATE DATABASE IF NOT EXISTS dart
     CHARACTER SET utf8mb4
@@ -7,7 +7,7 @@ CREATE DATABASE IF NOT EXISTS dart
 
 USE dart;
 
--- 기업 고유번호, 기업명, 영문명, 종목코드와 최신 동기화 상태를 저장한다.
+-- 고유번호·기업명·영문명·종목코드·동기화 상태
 CREATE TABLE IF NOT EXISTS dart_corp_codes (
     corp_code CHAR(8) NOT NULL,
     corp_name VARCHAR(200) NOT NULL,
@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS dart_corp_codes (
     INDEX idx_dart_corp_codes_active (is_active)
 ) ENGINE=InnoDB;
 
--- 원본 ZIP 해시와 동기화 결과를 기록해 변경 이력을 보존한다.
+-- 원본 ZIP 해시와 동기화 이력
 CREATE TABLE IF NOT EXISTS dart_corp_code_sync_runs (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     fetched_at DATETIME NOT NULL,

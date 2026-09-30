@@ -40,16 +40,16 @@ WHITE = (1.0, 1.0, 1.0)
 BORDER = (0.86, 0.89, 0.92)
 
 
+# PDF 레이아웃 계산과 출력에 동일한 내장 글꼴 사용
 @lru_cache(maxsize=1)
 def _report_font() -> fitz.Font:
-    """Use the same bundled font for layout measurements and PDF drawing."""
     return fitz.Font(fontfile=str(FONT_FILE))
 
 
+# 고정 영역에 맞춘 헤더 문구와 생략 여부 반환
 def _fit_single_line(
     text: str, max_width: float, font_size: float, min_size: float
 ) -> tuple[str, float, bool]:
-    """Fit a header label into its fixed area and report any omitted text."""
     value = " ".join(text.split())
     font = _report_font()
     while font_size > min_size and font.text_length(value, fontsize=font_size) > max_width:
@@ -67,12 +67,12 @@ def _fit_single_line(
     return value[:low].rstrip() + "…", font_size, True
 
 
+# 문자 수가 아니라 실제 한글 글꼴 폭을 기준으로 문단을 줄바꿈
 def _wrap_paragraph(
     text: str,
     max_width: float = CONTENT_WIDTH,
     font_size: float = 10.5,
 ) -> list[str]:
-    """문자 수가 아니라 실제 한글 글꼴 폭을 기준으로 문단을 줄바꿈한다."""
     font = _report_font()
     lines: list[str] = []
     for source_line in text.splitlines() or [text]:
@@ -103,8 +103,8 @@ def _wrap_paragraph(
     return lines or [""]
 
 
+# 지정 형식의 지표 행을 표 데이터로 파싱
 def _parse_metric_rows(text: str) -> list[tuple[str, str, str]]:
-    """`지표 | 현재값 | 비교값` 또는 `지표: 현재값` 줄을 표 데이터로 읽는다."""
     rows: list[tuple[str, str, str]] = []
     for source_line in text.splitlines():
         line = re.sub(r"^\s*(?:[-*•]\s*)?", "", source_line).strip()
@@ -132,6 +132,7 @@ def _safe_company_slug(company_name: str) -> str:
     return slug[:48] or "company"
 
 
+# 요약, 지표 카드, 분석, 주의사항과 출처를 페이지가 나뉘는 PDF로 저장
 def generate_financial_report_pdf(
     *,
     company_name: str,
@@ -142,7 +143,6 @@ def generate_financial_report_pdf(
     caveats: str,
     sources: str,
 ) -> dict[str, str]:
-    """요약, 지표 카드, 분석, 주의사항과 출처를 페이지가 나뉘는 PDF로 저장한다."""
     if not company_name.strip():
         raise ValueError("company_name이 필요합니다.")
 
@@ -408,22 +408,22 @@ def generate_financial_report_pdf(
     }
 
 
+# 설명 수준과 생성 시각을 포함한 다운로드 파일명 생성
 def build_download_filename(
     company_name: str,
     understanding_level: str,
     generated_at: datetime | None = None,
 ) -> str:
-    """선택 수준과 생성 시각을 포함한 다운로드용 파일명을 만든다."""
     level = re.sub(r"^\d+\.\s*", "", understanding_level)
     timestamp = (generated_at or datetime.now().astimezone()).strftime("%y%m%d%H%M")
     return f"{_safe_company_slug(company_name)}_{_safe_company_slug(level)}_{timestamp}.pdf"
 
 
+# 챗봇에서 사용한 정규화 차트 데이터를 PDF 부록 그래프로 추가
 def append_financial_charts_to_pdf(
     pdf_path: str | Path,
     companies: Iterable[dict],
 ) -> int:
-    """챗봇에서 사용한 정규화 차트 데이터를 PDF 부록 그래프로 추가한다."""
     chart_data = [item for item in companies if isinstance(item, dict)]
     if not chart_data:
         return 0
@@ -475,7 +475,7 @@ def append_financial_charts_to_pdf(
 
     total_pages = len(document)
     for page_number, page in enumerate(document, start=1):
-        # 기존 페이지 번호를 새 부록을 포함한 전체 쪽수로 갱신한다.
+        # 기존 페이지 번호를 새 부록을 포함한 전체 쪽수로 갱신
         page.add_redact_annot(
             fitz.Rect(PAGE_WIDTH - RIGHT_MARGIN - 52, PAGE_HEIGHT - 34,
                       PAGE_WIDTH - RIGHT_MARGIN + 4, PAGE_HEIGHT - 15),

@@ -32,29 +32,29 @@ class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
 
 
-# 아래 `_` 접두사 함수들은 이 모듈의 그래프 구성에만 쓰이는 내부 구현이다.
+# 그래프 구성용 내부 함수
+# 대화 상태에 시스템 프롬프트 적용 후 모델 호출
 def _call_model_node(
     state: AgentState,
     *,
     system_prompt: str,
     llm_with_tools: Any,
 ) -> dict[str, list[BaseMessage]]:
-    """대화 상태에 시스템 프롬프트를 보장하고 모델을 호출한다."""
     messages = list(state["messages"])
     if not messages or not isinstance(messages[0], SystemMessage):
         messages.insert(0, SystemMessage(content=system_prompt))
     return {"messages": [llm_with_tools.invoke(messages)]}
 
 
+# 도구 호출 유무에 따른 다음 노드 분기
 def _should_continue(state: AgentState) -> str:
-    """마지막 모델 응답에 도구 호출이 있으면 도구 노드로 보낸다."""
     last_message = state["messages"][-1]
     return "tools" if getattr(last_message, "tool_calls", None) else END
 
 
+# 시스템 프롬프트와 도구를 사용하는 LangGraph 구성
 def _compile_agent(system_prompt: str, tools: Sequence[object]):
-    """시스템 프롬프트와 도구 집합으로 재사용 가능한 LangGraph를 만든다."""
-    # GPT-5 계열 모델은 temperature 인자를 허용하지 않으므로 기본값을 사용한다.
+    # GPT-5 계열의 temperature 미지원으로 기본값 사용
     llm = ChatOpenAI(model=os.getenv("DEFAULT_LLM_MODEL", "gpt-5-nano"))
     llm_with_tools = llm.bind_tools(list(tools), parallel_tool_calls=False)
 
@@ -74,8 +74,8 @@ def _compile_agent(system_prompt: str, tools: Sequence[object]):
     return workflow.compile()
 
 
+# stdio MCP 도구 연결 및 이해 수준별 상담 그래프 생성
 async def create_financial_agent_graph(understanding_level: str):
-    """stdio MCP 서버에서 도구를 읽어 이해 수준별 재무 상담 그래프를 만든다."""
     system_prompt = build_financial_system_prompt(understanding_level)
     minimal_env = {
         "PATH": os.environ.get("PATH", ""),

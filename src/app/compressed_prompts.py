@@ -37,8 +37,8 @@ OpenDART 공시 기반 재무제표 설명 챗봇.
 """.strip()
 
 
+# 선택된 이해 수준에 맞는 재무 설명 프롬프트를 반환
 def build_financial_system_prompt(level: str) -> str:
-    """선택된 이해 수준에 맞는 재무 설명 프롬프트를 반환한다."""
     if level not in _LEVEL_GUIDANCE:
         raise ValueError(f"지원하지 않는 이해 수준입니다: {level}")
     return f"{_COMMON_INSTRUCTIONS}\n\n설명 수준: {level}\n{_LEVEL_GUIDANCE[level]}"

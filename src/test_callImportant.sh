@@ -174,7 +174,7 @@ async def run_api_tests():
         async with api.OpenDartImportantClient(timeout=45) as client:
             record("OpenDartImportantClient.__init__/__aenter__", "opened")
 
-            # 모든 요청 경로를 별도로 실행해 낮은 수준의 JSON/ZIP 요청도 확인한다.
+            # JSON·ZIP 요청 경로별 실행
             await run_async("_request_json", client._request_json, "company.json", {"corp_code": args.corp_code})
             await run_async("_request_binary", client._request_binary, "corpCode.xml", {})
             await run_async("call_json_api", client.call_json_api, "/api/company.json", {"corp_code": args.corp_code})

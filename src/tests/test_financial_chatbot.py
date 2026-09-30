@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
-# 앱 모듈 import 시 Settings가 키를 요구하지만, 이 테스트들은 외부 API를 호출하지 않는다.
+# 모듈 import용 설정 키. 외부 API 호출 없음
 os.environ.setdefault("OPENAI_API_KEY", "offline-test-key")
 SRC_DIR = Path(__file__).resolve().parents[1]
 if str(SRC_DIR) not in sys.path:
@@ -77,7 +77,7 @@ class FinancialMCPToolTests(unittest.IsolatedAsyncioTestCase):
         async def fake_fetch(**kwargs):
             forwarded.append(kwargs)
             # _minimize_financial_payload가 reports의 각 항목을 딕셔너리로 다루므로
-            # 실제 반환 구조(딕셔너리 리스트)에 맞춘 최소 형태를 사용한다.
+            # 실제 반환 형식에 맞춘 최소 딕셔너리 목록
             return {
                 "company_name": kwargs["company_name"],
                 "reports": [{"report_nm": "latest"}],
@@ -108,10 +108,10 @@ class FinancialMCPToolTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             await tool("삼성전자", history_count=1, fs_div="INVALID")
 
+    # mcp_tools 진입점에서 실제 callImportantAPI 경로까지 최소 API 정책이 유지되는지 확인
     async def test_tool_end_to_end_uses_minimal_api_calls_and_serializes_none_fields(
         self,
     ) -> None:
-        """mcp_tools 진입점에서 실제 callImportantAPI 경로까지 최소 API 정책이 유지되는지 확인한다."""
         from app.callImportantAPI import OpenDartImportantClient
 
         fake_report = {
@@ -160,7 +160,7 @@ class FinancialMCPToolTests(unittest.IsolatedAsyncioTestCase):
         payload = json.loads(raw_result)
         self.assertIsNone(payload["company_detail"])
         # _minimize_financial_payload가 raw payload(accounts/accounts_all/indices)를
-        # LLM 응답에서 제거하므로 더 이상 존재하지 않아야 한다.
+        # LLM 응답에서 제외되는 raw payload 검증
         report_payload = payload["reports"][0]
         self.assertNotIn("accounts", report_payload)
         self.assertNotIn("accounts_all", report_payload)
@@ -168,8 +168,8 @@ class FinancialMCPToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("normalized_accounts", report_payload)
         self.assertIn("normalized_indices", report_payload)
 
+    # _minimize_financial_payload가 raw payload와 항목별 중복 source를 제거하는지 확인
     def test_minimize_financial_payload_drops_raw_data_and_duplicate_source(self) -> None:
-        """_minimize_financial_payload가 raw payload와 항목별 중복 source를 제거하는지 확인한다."""
         source = {"corp_code": "00126380", "bsns_year": "2023", "rcept_no": "20240101000001"}
         result = {
             "company": {"corp_code": "00126380"},
@@ -201,7 +201,7 @@ class FinancialMCPToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("indices", report_payload)
         self.assertNotIn("source", report_payload["normalized_accounts"][0])
         self.assertNotIn("source", report_payload["normalized_indices"]["profitability"][0])
-        # report 단위 메타데이터(report, source)는 그대로 보존되어야 한다.
+        # report 단위 메타데이터(report, source) 보존 검증
         self.assertEqual(report_payload["source"], source)
         self.assertEqual(report_payload["normalized_accounts"][0]["amount"], "100")
 

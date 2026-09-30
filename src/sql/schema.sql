@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS companies (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- FinancialReport 테이블 DDL
+-- 재무보고서 테이블 정의
 CREATE TABLE IF NOT EXISTS financial_reports (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     corp_code VARCHAR(8) NOT NULL,
@@ -19,6 +19,6 @@ CREATE TABLE IF NOT EXISTS financial_reports (
     FOREIGN KEY (corp_code) REFERENCES companies(corp_code) ON DELETE CASCADE
 );
 
--- 인덱스 생성 (조회 성능 최적화)
+-- 조회 성능용 인덱스
 CREATE INDEX IF NOT EXISTS idx_financial_reports_corp_year
 ON financial_reports (corp_code, bsns_year);

@@ -45,8 +45,8 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
-# CorpCode 전용 MySQL 연결 문자열을 읽을 환경변수 이름이다.
-# 일반 애플리케이션의 SQLite ``DATABASE_URL``과 충돌하지 않도록 별도로 둔다.
+# CorpCode 전용 MySQL 연결 문자열을 읽을 환경변수 이름
+# 일반 앱의 SQLite ``DATABASE_URL``과 분리
 CORP_CODE_DATABASE_URL_ENV = "CORP_CODE_DATABASE_URL"
 SYNC_LOCK_NAME = "opendart_corp_code_sync"
 SYNC_LOCK_TIMEOUT_SECONDS = 30
@@ -97,8 +97,8 @@ class SyncResult:
     skipped: bool
 
 
+# 실행 환경의 OpenDART 인증키 조회
 def get_api_key() -> str:
-    """실행 환경에서 OpenDART 인증키를 읽는다."""
 
     api_key = os.getenv("DART_API_KEY") or os.getenv("OPENDART_API_KEY")
     if not api_key:
@@ -108,21 +108,21 @@ def get_api_key() -> str:
     return api_key
 
 
+# 동기 호환 래퍼의 ZIP 요청 경로
 def download_corp_code_zip(api_key: str, timeout: float = 30.0) -> bytes:
-    """동기 호환 래퍼도 callImportantAPI.py를 통해 ZIP을 내려받는다."""
     return asyncio.run(async_download_corp_code_zip(api_key, timeout))
 
 
+# CorpCode ZIP 호출을 공통 OpenDART API 클라이언트에 위임
 async def async_download_corp_code_zip(api_key: str, timeout: float = 30.0) -> bytes:
-    """CorpCode ZIP 호출을 공통 OpenDART API 클라이언트에 위임한다."""
     from app.callImportantAPI import OpenDartImportantClient
 
     async with OpenDartImportantClient(api_key=api_key, timeout=timeout) as client:
         return await client.get_corp_code_zip()
 
 
+# ZIP 내부 XML에서 DB에 저장할 기업 필드만 정규화
 def parse_corp_code_zip(zip_bytes: bytes) -> list[dict[str, str]]:
-    """ZIP 내부 XML에서 DB에 저장할 기업 필드만 정규화한다."""
 
     with zipfile.ZipFile(BytesIO(zip_bytes)) as archive:
         xml_files = [name for name in archive.namelist() if name.lower().endswith(".xml")]
@@ -151,10 +151,10 @@ def parse_corp_code_zip(zip_bytes: bytes) -> list[dict[str, str]]:
     return records
 
 
+# 동기 MySQL URL을 asyncmy 드라이버 URL로 변환
 def _async_database_url(database_url: str | None) -> str:
-    """동기 MySQL URL을 asyncmy 드라이버 URL로 변환한다."""
 
-    # 로컬 실행 시 .env를 읽고, 인자로 받은 URL이 없으면 전용 환경변수를 사용한다.
+    # 로컬 실행 시 .env를 읽고, 인자로 받은 URL이 없으면 전용 환경변수를 사용
     load_dotenv()
     url = database_url or os.getenv(CORP_CODE_DATABASE_URL_ENV)
     if not url:
@@ -173,8 +173,8 @@ def _async_database_url(database_url: str | None) -> str:
     )
 
 
+# 동시 Agent 요청을 처리할 비동기 MySQL 엔진과 커넥션 풀을 생성
 def create_corp_code_async_engine(database_url: str | None = None):
-    """동시 Agent 요청을 처리할 비동기 MySQL 엔진과 커넥션 풀을 생성한다."""
 
     return create_async_engine(
         _async_database_url(database_url),
@@ -185,12 +185,11 @@ def create_corp_code_async_engine(database_url: str | None = None):
     )
 
 
+# Agent용 비동기 엔진과 세션 팩토리 생성
+#
+# 애플리케이션 시작 시 한 번 생성하고, 종료 시 반환된 엔진의 ``dispose``를
+# 종료 시 엔진 폐기. 요청 간 커넥션 풀 공유
 def create_corp_code_session_factory(database_url: str | None = None):
-    """Agent 서비스가 재사용할 비동기 엔진과 세션 팩토리를 함께 만든다.
-
-    애플리케이션 시작 시 한 번 생성하고, 종료 시 반환된 엔진의 ``dispose``를
-    호출한다. 요청마다 엔진을 새로 만들지 않아 커넥션 풀을 공유할 수 있다.
-    """
 
     engine = create_corp_code_async_engine(database_url)
     session_factory = async_sessionmaker(
@@ -202,25 +201,24 @@ def create_corp_code_session_factory(database_url: str | None = None):
     return engine, session_factory
 
 
+# 기업명으로 활성 CorpCode 후보를 비동기 검색
+#
+# 정확히 일치하는 기업명을 먼저 찾고, 결과가 없으면 부분 일치로 검색
+# Agent가 후보가 여러 개인 경우 사용자에게 재선택을 요청할 수 있도록
+# ``corp_code``와 기업 식별 정보를 딕셔너리 목록으로 반환
+#
+# Args:
+# company_name: 검색할 기업명(예: ``"삼성전자"``).
+# database_url: 선택적 MySQL SQLAlchemy URL.
+# limit: 반환할 최대 후보 수.
+#
+# Returns:
+# ``corp_code``, 기업명, 영문명, 종목코드, 수정일을 담은 딕셔너리 목록.
 async def find_corp_codes_by_name(
     company_name: str,
     database_url: str | None = None,
     limit: int = 10,
 ) -> list[dict[str, Any]]:
-    """기업명으로 활성 CorpCode 후보를 비동기 검색한다.
-
-    정확히 일치하는 기업명을 먼저 찾고, 결과가 없으면 부분 일치로 검색한다.
-    Agent가 후보가 여러 개인 경우 사용자에게 재선택을 요청할 수 있도록
-    ``corp_code``와 기업 식별 정보를 딕셔너리 목록으로 반환한다.
-
-    Args:
-        company_name: 검색할 기업명(예: ``"삼성전자"``).
-        database_url: 선택적 MySQL SQLAlchemy URL.
-        limit: 반환할 최대 후보 수.
-
-    Returns:
-        ``corp_code``, 기업명, 영문명, 종목코드, 수정일을 담은 딕셔너리 목록.
-    """
 
     normalized_name = company_name.strip()
     if not normalized_name:
@@ -259,8 +257,8 @@ async def find_corp_codes_by_name(
         await engine.dispose()
 
 
+# 동기화 작업을 한 번에 하나만 실행하도록 MySQL named lock을 획득
 async def _acquire_sync_lock(connection: AsyncConnection) -> None:
-    """동기화 작업을 한 번에 하나만 실행하도록 MySQL named lock을 획득한다."""
 
     locked = await connection.scalar(
         text("SELECT GET_LOCK(:lock_name, :timeout_seconds)"),
@@ -274,8 +272,8 @@ async def _acquire_sync_lock(connection: AsyncConnection) -> None:
         raise TimeoutError("다른 CorpCode 동기화가 실행 중이어서 잠금을 획득하지 못했습니다.")
 
 
+# 획득한 MySQL named lock을 같은 연결에서 해제
 async def _release_sync_lock(connection: AsyncConnection) -> None:
-    """획득한 MySQL named lock을 같은 연결에서 해제한다."""
 
     await connection.execute(
         text("SELECT RELEASE_LOCK(:lock_name)"),
@@ -284,13 +282,13 @@ async def _release_sync_lock(connection: AsyncConnection) -> None:
     await connection.commit()
 
 
+# 잠금을 보유한 세션에서 다운로드·비교·일괄 반영을 수행
 async def _sync_corp_codes_with_session(
     session: AsyncSession,
     api_key: str,
     archive_path: str | Path | None,
     timeout: float,
 ) -> SyncResult:
-    """잠금을 보유한 세션에서 다운로드·비교·일괄 반영을 수행한다."""
 
     zip_bytes = await async_download_corp_code_zip(api_key, timeout=timeout)
     source_sha256 = hashlib.sha256(zip_bytes).hexdigest()
@@ -319,7 +317,7 @@ async def _sync_corp_codes_with_session(
     inserts: list[dict[str, Any]] = []
     updates: list[dict[str, Any]] = []
     # 실제 기업 정보만 비교한다. 조회 시각 필드는 비교에서 제외해
-    # 원본 정보가 변경되지 않았을 때 불필요한 UPDATE가 발생하지 않게 한다.
+    # 원본 정보가 바뀌지 않으면 불필요한 UPDATE 제외
     business_fields = (
         "corp_name",
         "corp_eng_name",
@@ -379,18 +377,17 @@ async def _sync_corp_codes_with_session(
     )
 
 
+# 비동기 방식으로 CorpCode를 동기화
+#
+# MySQL named lock이 연결된 상태에서 유지되므로 여러 Agent worker가 동시에
+# 다중 worker에서도 쓰기 작업은 단일 실행. 일반 조회는 별도 풀 사용
+
 async def async_sync_corp_codes(
     database_url: str | None = None,
     api_key: str | None = None,
     archive_path: str | Path | None = None,
     timeout: float = 30.0,
 ) -> SyncResult:
-    """비동기 방식으로 CorpCode를 동기화한다.
-
-    MySQL named lock이 연결된 상태에서 유지되므로 여러 Agent worker가 동시에
-    호출해도 한 작업만 쓰기 작업을 수행한다. 일반 조회 세션은 별도 풀에서
-    병렬로 처리할 수 있다.
-    """
 
     engine = create_corp_code_async_engine(database_url)
     try:
@@ -413,25 +410,25 @@ async def async_sync_corp_codes(
         await engine.dispose()
 
 
+# 기존 동기 호출자용 래퍼. 비동기 서버는 async 함수 사용
 def sync_corp_codes(
     database_url: str | None = None,
     api_key: str | None = None,
     archive_path: str | Path | None = None,
     timeout: float = 30.0,
 ) -> SyncResult:
-    """기존 동기 호출자를 위한 래퍼이다. 비동기 서버에서는 async 함수를 사용한다."""
 
     return asyncio.run(
         async_sync_corp_codes(database_url, api_key, archive_path, timeout)
     )
 
 
+# company.json 원본 응답을 비동기 Python 딕셔너리로 반환
 async def async_get_company_json(
     corp_code: str,
     api_key: str | None = None,
     timeout: float = 15.0,
 ) -> dict[str, Any]:
-    """company.json 원본 응답을 비동기 Python 딕셔너리로 반환한다."""
 
     if len(corp_code) != 8 or not corp_code.isdigit():
         raise ValueError("corp_code는 숫자 8자리여야 합니다.")
@@ -441,18 +438,18 @@ async def async_get_company_json(
         return await client.call_json_api("company.json", {"corp_code": corp_code})
 
 
+# 기존 동기 호출자를 위한 company.json 조회 래퍼
 def get_company_json(
     corp_code: str,
     api_key: str | None = None,
     timeout: float = 15.0,
 ) -> dict[str, Any]:
-    """기존 동기 호출자를 위한 company.json 조회 래퍼이다."""
 
     return asyncio.run(async_get_company_json(corp_code, api_key, timeout))
 
 
+# CLI에서 동기화 결과와 선택적 company.json을 출력
 async def _async_main() -> None:
-    """CLI에서 동기화 결과와 선택적 company.json을 출력한다."""
 
     parser = argparse.ArgumentParser(
         description="OpenDART corpCode.xml을 비동기 방식으로 MySQL에 동기화합니다."

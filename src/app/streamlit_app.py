@@ -30,14 +30,14 @@ from app.chart_data import extract_latest_chart_data_list
 
 st.set_page_config(page_title="OpenDART 재무 요약 챗봇", page_icon="📊", layout="wide")
 
+# 선택한 설명 수준에 해당하는 MCP 기반 LangGraph를 재사용
 @st.cache_resource(show_spinner="재무 MCP 도구를 연결하고 있습니다...")
 def get_agent(understanding_level: str):
-    """선택한 설명 수준에 해당하는 MCP 기반 LangGraph를 재사용한다."""
     return asyncio.run(create_financial_agent_graph(understanding_level))
 
 
+# LangChain 텍스트 블록을 화면 표시 문자열로 변환
 def _message_text(content) -> str:
-    """LangChain 메시지의 텍스트 블록을 화면 표시용 문자열로 바꾼다."""
     if isinstance(content, str):
         return content
     if isinstance(content, list):
@@ -51,8 +51,8 @@ def _message_text(content) -> str:
     return str(content or "")
 
 
+# MCP PDF 도구 결과에서 다운로드 ID와 파일명을 보관
 def _remember_pdf_outputs(messages, fallback_chart_data=()) -> None:
-    """MCP PDF 도구 결과에서 다운로드 ID와 파일명을 보관한다."""
     marker = re.compile(r"PDF_READY:([0-9a-f]{32}):([A-Za-z0-9가-힣_.-]+\.pdf)")
     for message in reversed(list(messages)):
         if isinstance(message, ToolMessage):
@@ -89,8 +89,8 @@ def _metric_map(chart_data: dict, section: str) -> dict:
     return {row["metric"]: row for row in chart_data.get(section, [])}
 
 
+# 단일 회사는 도넛 + compact 가로 막대를 한 줄에 표시
 def _render_single_company_charts(chart_data: dict) -> None:
-    """단일 회사는 도넛 + compact 가로 막대를 한 줄에 표시한다."""
     position_rows = _metric_map(chart_data, "financial_position")
     profit_rows = _metric_map(chart_data, "profitability")
 
@@ -171,8 +171,8 @@ def _render_single_company_charts(chart_data: dict) -> None:
             st.caption("손익 차트에 필요한 매출·영업이익·당기순이익 값이 부족합니다.")
 
 
+# 여러 회사는 재무구조 도넛과 주요 지표 grouped bar로 비교
 def _render_comparison_charts(companies: list[dict]) -> None:
-    """여러 회사는 재무구조 도넛과 주요 지표 grouped bar로 비교한다."""
     st.markdown("### 주요 재무정보 비교")
     names = [str(item.get("company_name") or "기업") for item in companies]
     st.caption(f"{' vs '.join(names)} · 단위: 조원")
@@ -258,8 +258,8 @@ def _render_comparison_charts(companies: list[dict]) -> None:
         st.caption("비교 차트에 사용할 주요 재무지표가 없습니다.")
 
 
+# 최근 질문의 회사 수에 따라 단일/비교 차트를 자동으로 선택
 def _render_financial_charts(messages) -> None:
-    """최근 질문의 회사 수에 따라 단일/비교 차트를 자동으로 선택한다."""
     chart_data_list = extract_latest_chart_data_list(messages)
     if len(chart_data_list) >= 2:
         _render_comparison_charts(chart_data_list)
@@ -268,8 +268,8 @@ def _render_financial_charts(messages) -> None:
     if len(chart_data_list) == 1:
         _render_single_company_charts(chart_data_list[0])
 
+# 설명 수준과 대화 상태 초기화 후 첫 화면 복귀
 def _reset_to_level_selection() -> None:
-    """설명 수준과 대화 상태를 지우고 첫 화면으로 돌아간다."""
     for key in ("understanding_level", "agent_messages", "latest_pdf"):
         st.session_state.pop(key, None)
     st.rerun()
@@ -352,5 +352,5 @@ if user_input:
         )
         st.rerun()
     except Exception as exc:
-        # 모델·MCP 예외에 URL이나 설정값이 포함될 수 있어 사용자 화면에는 유형만 표시한다.
+        # 모델·MCP 예외에 URL이나 설정값이 포함될 수 있어 사용자 화면에는 유형만 표시
         st.error(f"요청을 처리하지 못했습니다 ({type(exc).__name__}). 설정과 연결 상태를 확인해 주세요.")

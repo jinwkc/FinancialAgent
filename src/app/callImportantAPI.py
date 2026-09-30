@@ -21,36 +21,36 @@ import httpx
 from app.corp_code_sync import find_corp_codes_by_name
 
 
-# OpenDART API 요청 주소를 만들 때 사용하는 공통 기본 URL이다.
+# OpenDART API 기본 URL
 OPEN_DART_BASE_URL = "https://opendart.fss.or.kr/api"
-# 상장·비상장 법인의 고유번호가 담긴 ZIP/XML 파일을 받는 엔드포인트다.
+# 법인 고유번호 ZIP/XML 엔드포인트
 CORP_CODE_ENDPOINT = "corpCode.xml"
-# 법인의 기본 개황 정보를 조회하는 엔드포인트다.
+# 기업 개황 조회 엔드포인트
 COMPANY_ENDPOINT = "company.json"
-# 공시 목록과 접수번호를 검색하는 엔드포인트다.
+# 공시 목록 조회 엔드포인트
 DISCLOSURE_LIST_ENDPOINT = "list.json"
-# 특정 법인의 주요 재무 계정을 조회하는 엔드포인트다.
+# 단일회사 주요계정 조회 엔드포인트
 SINGLE_ACCOUNT_ENDPOINT = "fnlttSinglAcnt.json"
-# 특정 법인의 주요 재무지표를 조회하는 엔드포인트다.
+# 단일회사 재무지표 조회 엔드포인트
 SINGLE_INDEX_ENDPOINT = "fnlttSinglIndx.json"
-# 특정 법인의 전체 재무제표 계정을 조회하는 엔드포인트다.
+# 단일회사 전체 재무제표 조회 엔드포인트
 SINGLE_ACCOUNT_ALL_ENDPOINT = "fnlttSinglAcntAll.json"
-# 공시 원문 ZIP/XML 파일을 받는 기본 엔드포인트다.
+# 공시 원문 ZIP/XML 엔드포인트
 DOCUMENT_ENDPOINT = "document.xml"
-# 공시 원문 JSON 응답을 시도할 때 사용하는 보조 엔드포인트다.
+# 공시 원문 JSON 보조 엔드포인트
 DOCUMENT_JSON_ENDPOINT = "document.json"
-# 여러 법인의 주요 재무 계정을 비교 조회하는 엔드포인트다.
+# 다중회사 주요계정 비교 엔드포인트
 MULTI_ACCOUNT_ENDPOINT = "fnlttMultiAcnt.json"
-# 여러 법인의 재무지표를 비교 조회하는 엔드포인트다.
+# 다중회사 재무지표 비교 엔드포인트
 MULTI_INDEX_ENDPOINT = "fnlttCmpnyIndx.json"
-# XBRL 재무제표의 계정 분류 체계를 조회하는 엔드포인트다.
+# XBRL 계정 분류 조회 엔드포인트
 XBRL_TAXONOMY_ENDPOINT = "xbrlTaxonomy.json"
-# XBRL 원본 재무제표 ZIP/XML 파일을 받는 엔드포인트다.
+# XBRL 원본 ZIP/XML 엔드포인트
 XBRL_FILE_ENDPOINT = "fnlttXbrl.xml"
 
-# 정기보고서(사업·반기·분기) 종류를 구분하는 OpenDART 보고서 코드 집합이다.
+# 정기보고서(사업·반기·분기) 종류를 구분하는 OpenDART 보고서 코드 집합
 REPORT_CODES = {"11013", "11012", "11014", "11011"}
-# 개별재무제표(OFS)와 연결재무제표(CFS)를 허용하는 재무제표 구분 코드 집합이다.
+# 개별재무제표(OFS)와 연결재무제표(CFS)를 허용하는 재무제표 구분 코드 집합
 FS_DIVISIONS = {"OFS", "CFS"}
 
 
@@ -63,19 +63,18 @@ class OpenDartApiError(RuntimeError):
         super().__init__(f"OpenDART 오류 {status}: {self.message}")
 
 
+# 인자 또는 환경변수에서 OpenDART 인증키 조회
+#
+# Args:
+# api_key: 호출자가 직접 전달할 40자리 OpenDART 인증키. 생략하면
+# ``DART_API_KEY``와 ``OPENDART_API_KEY``를 순서대로 확인
+#
+# Returns:
+# 사용할 인증키 문자열.
+#
+# Raises:
+# RuntimeError: 인증키를 찾지 못한 경우.
 def get_api_key(api_key: str | None = None) -> str:
-    """OpenDART 인증키를 인자로 받거나 환경변수에서 반환한다.
-
-    Args:
-        api_key: 호출자가 직접 전달할 40자리 OpenDART 인증키. 생략하면
-            ``DART_API_KEY``와 ``OPENDART_API_KEY``를 순서대로 확인한다.
-
-    Returns:
-        사용할 인증키 문자열.
-
-    Raises:
-        RuntimeError: 인증키를 찾지 못한 경우.
-    """
 
     key = api_key or os.getenv("DART_API_KEY") or os.getenv("OPENDART_API_KEY")
     if not key:
@@ -85,30 +84,29 @@ def get_api_key(api_key: str | None = None) -> str:
     return key
 
 
+# 기업 고유번호가 숫자 8자리인지 검증하고 반환
 def _require_corp_code(corp_code: str) -> str:
-    """기업 고유번호가 숫자 8자리인지 검증하고 반환한다."""
 
     if len(corp_code) != 8 or not corp_code.isdigit():
         raise ValueError("corp_code는 숫자 8자리여야 합니다.")
     return corp_code
 
 
+# 재무 API 공통 필수 파라미터를 검증하고 딕셔너리로 반환
+#
+# Args:
+# corp_code: OpenDART 기업 고유번호 8자리.
+# bsns_year: 사업연도 4자리 문자열(예: ``"2024"``).
+# reprt_code: 보고서 코드. 1분기 ``11013``, 반기 ``11012``,
+# 3분기 ``11014``, 사업보고서 ``11011``.
+#
+# Returns:
+# 검증된 ``corp_code``, ``bsns_year``, ``reprt_code`` 딕셔너리.
 def _require_report_params(
     corp_code: str,
     bsns_year: str,
     reprt_code: str,
 ) -> dict[str, str]:
-    """재무 API 공통 필수 파라미터를 검증하고 딕셔너리로 반환한다.
-
-    Args:
-        corp_code: OpenDART 기업 고유번호 8자리.
-        bsns_year: 사업연도 4자리 문자열(예: ``"2024"``).
-        reprt_code: 보고서 코드. 1분기 ``11013``, 반기 ``11012``,
-            3분기 ``11014``, 사업보고서 ``11011``.
-
-    Returns:
-        검증된 ``corp_code``, ``bsns_year``, ``reprt_code`` 딕셔너리.
-    """
 
     _require_corp_code(corp_code)
     if len(bsns_year) != 4 or not bsns_year.isdigit():
@@ -122,8 +120,8 @@ def _require_report_params(
     }
 
 
+# 공시 보고서명에서 OpenDART 재무 API용 보고서 코드를 추정
 def _report_code_from_name(report_name: str) -> str | None:
-    """공시 보고서명에서 OpenDART 재무 API용 보고서 코드를 추정한다."""
 
     if "사업보고서" in report_name:
         return "11011"
@@ -134,8 +132,8 @@ def _report_code_from_name(report_name: str) -> str | None:
     return None
 
 
+# 보고서명 또는 접수일 기준 사업연도 결정
 def _business_year_from_report(report: Mapping[str, Any]) -> str:
-    """공시 보고서명 또는 접수일에서 재무 API 사업연도를 얻는다."""
 
     report_name = str(report.get("report_nm") or "")
     year_match = re.search(r"20\d{2}", report_name)
@@ -143,23 +141,22 @@ def _business_year_from_report(report: Mapping[str, Any]) -> str:
         return year_match.group(0)
     receipt_date = str(report.get("rcept_dt") or "")
     if len(receipt_date) >= 4 and receipt_date[:4].isdigit():
-        # 보고서명에 기간이 없을 때만 접수연도를 보정값으로 사용한다.
+        # 보고서명에 기간이 없을 때만 접수연도를 보정값으로 사용
         return str(int(receipt_date[:4]) - 1)
     raise ValueError(
         "공시 결과에서 사업연도를 확인할 수 없습니다. bsns_year를 직접 지정하세요."
     )
 
 
+# 금액·지표 문자열을 검증하고 결측 상태를 보존
+#
+# Args:
+# value: 쉼표가 포함된 금액 문자열, 지표 문자열, ``None`` 또는 ``-``.
+#
+# Returns:
+# 원본 문자열(``raw``), 정규화 문자열(``value``), 사용 가능 여부
+# (``available``)를 담은 딕셔너리. 결측값은 0으로 바꾸지 미적용
 def _normalize_numeric_text(value: Any) -> dict[str, Any]:
-    """금액·지표 문자열을 검증하고 결측 상태를 보존한다.
-
-    Args:
-        value: 쉼표가 포함된 금액 문자열, 지표 문자열, ``None`` 또는 ``-``.
-
-    Returns:
-        원본 문자열(``raw``), 정규화 문자열(``value``), 사용 가능 여부
-        (``available``)를 담은 딕셔너리. 결측값은 0으로 바꾸지 않는다.
-    """
 
     if value is None:
         return {"raw": None, "value": None, "available": False}
@@ -174,12 +171,12 @@ def _normalize_numeric_text(value: Any) -> dict[str, Any]:
     return {"raw": raw, "value": normalized, "available": True}
 
 
+# 재무 수치 출처 메타데이터 생성
 def _report_source_metadata(
     report: Mapping[str, Any],
     fs_div: str | None = None,
     stlm_dt: str | None = None,
 ) -> dict[str, Any]:
-    """재무 수치의 출처를 재현할 수 있는 공통 메타데이터를 만든다."""
 
     return {
         "corp_code": report.get("corp_code"),
@@ -194,20 +191,19 @@ def _report_source_metadata(
     }
 
 
+# 전체 재무제표 계정을 보고서용 구조로 정규화
+#
+# Args:
+# item: ``fnlttSinglAcntAll.json``의 개별 계정 응답.
+# report: 보고서 메타데이터(``bsns_year``, ``reprt_code`` 등).
+#
+# Returns:
+# 계정 식별자, 선택된 금액, 원본 금액, 출처 메타데이터를 포함한 딕셔너리.
+# 분기·반기·3분기 손익/현금흐름은 누적 금액 필드를 선택
 def normalize_account_item(
     item: Mapping[str, Any],
     report: Mapping[str, Any],
 ) -> dict[str, Any]:
-    """전체 재무제표 계정을 보고서용 구조로 정규화한다.
-
-    Args:
-        item: ``fnlttSinglAcntAll.json``의 개별 계정 응답.
-        report: 보고서 메타데이터(``bsns_year``, ``reprt_code`` 등).
-
-    Returns:
-        계정 식별자, 선택된 금액, 원본 금액, 출처 메타데이터를 포함한 딕셔너리.
-        분기·반기·3분기 손익/현금흐름은 누적 금액 필드를 선택한다.
-    """
 
     sj_div = item.get("sj_div")
     reprt_code = str(report.get("reprt_code") or item.get("reprt_code") or "")
@@ -234,20 +230,19 @@ def normalize_account_item(
     }
 
 
+# 재무지표를 결측값 상태와 출처 메타데이터를 포함해 정규화
+#
+# Args:
+# item: ``fnlttSinglIndx.json``의 개별 지표 응답.
+# report: 보고서 메타데이터.
+#
+# Returns:
+# 지표명, 지표값, 지표값 사용 가능 여부, 기준일, 출처를 포함한 딕셔너리.
+# ``idx_val``이 ``None``이면 ``available=False``로 반환, 0 대체 없음
 def normalize_index_item(
     item: Mapping[str, Any],
     report: Mapping[str, Any],
 ) -> dict[str, Any]:
-    """재무지표를 결측값 상태와 출처 메타데이터를 포함해 정규화한다.
-
-    Args:
-        item: ``fnlttSinglIndx.json``의 개별 지표 응답.
-        report: 보고서 메타데이터.
-
-    Returns:
-        지표명, 지표값, 지표값 사용 가능 여부, 기준일, 출처를 포함한 딕셔너리.
-        ``idx_val``이 ``None``이면 ``available=False``로 반환하며 0으로 대체하지 않는다.
-    """
 
     value = _normalize_numeric_text(item.get("idx_val"))
     return {
@@ -290,8 +285,8 @@ class OpenDartImportantClient:
         self.max_connections = max_connections
         self._client: httpx.AsyncClient | None = None
 
+    # HTTP 연결 풀을 열고 클라이언트를 반환
     async def __aenter__(self) -> "OpenDartImportantClient":
-        """HTTP 연결 풀을 열고 클라이언트를 반환한다."""
 
         limits = httpx.Limits(
             max_connections=self.max_connections,
@@ -304,31 +299,30 @@ class OpenDartImportantClient:
         )
         return self
 
+    # HTTP 연결 풀 종료
     async def __aexit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
-        """HTTP 연결 풀을 닫는다."""
 
         if self._client is not None:
             await self._client.aclose()
             self._client = None
 
+    # JSON API를 호출하고 정상 응답 딕셔너리를 반환
+    #
+    # Args:
+    # endpoint: ``company.json`` 같은 OpenDART API 파일명.
+    # params: 인증키를 제외한 API 요청 파라미터.
+    #
+    # Returns:
+    # OpenDART의 원본 JSON 응답 딕셔너리(``status``, ``message``, ``list`` 등).
+    #
+    # Raises:
+    # RuntimeError: ``async with`` 외부에서 호출한 경우.
+    # OpenDartApiError: HTTP 오류 또는 OpenDART ``status``가 ``000``이 아닌 경우.
     async def _request_json(
         self,
         endpoint: str,
         params: Mapping[str, str | int | None],
     ) -> dict[str, Any]:
-        """JSON API를 호출하고 정상 응답 딕셔너리를 반환한다.
-
-        Args:
-            endpoint: ``company.json`` 같은 OpenDART API 파일명.
-            params: 인증키를 제외한 API 요청 파라미터.
-
-        Returns:
-            OpenDART의 원본 JSON 응답 딕셔너리(``status``, ``message``, ``list`` 등).
-
-        Raises:
-            RuntimeError: ``async with`` 외부에서 호출한 경우.
-            OpenDartApiError: HTTP 오류 또는 OpenDART ``status``가 ``000``이 아닌 경우.
-        """
 
         if self._client is None:
             raise RuntimeError("클라이언트는 async with 블록 안에서 사용해야 합니다.")
@@ -349,12 +343,12 @@ class OpenDartImportantClient:
             raise OpenDartApiError(payload.get("status"), payload.get("message"))
         return payload
 
+    # ZIP/XML 파일 API를 호출하고 원본 바이트를 반환
     async def _request_binary(
         self,
         endpoint: str,
         params: Mapping[str, str | int | None],
     ) -> bytes:
-        """ZIP/XML 파일 API를 호출하고 원본 바이트를 반환한다."""
 
         if self._client is None:
             raise RuntimeError("클라이언트는 async with 블록 안에서 사용해야 합니다.")
@@ -378,20 +372,19 @@ class OpenDartImportantClient:
             raise OpenDartApiError(payload.get("status"), payload.get("message"))
         return content
 
+    # ImportantList에 없는 OpenDART JSON API도 비동기로 호출
+    #
+    # Args:
+    # endpoint: API 파일명 또는 ``/api`` 기준 상대 경로.
+    # params: API별 요청 인자. ``crtfc_key``는 자동으로 추가됨
+    #
+    # Returns:
+    # 정상 OpenDART JSON 응답 딕셔너리.
     async def call_json_api(
         self,
         endpoint: str,
         params: Mapping[str, str | int | None] | None = None,
     ) -> dict[str, Any]:
-        """ImportantList에 없는 OpenDART JSON API도 비동기로 호출한다.
-
-        Args:
-            endpoint: API 파일명 또는 ``/api`` 기준 상대 경로.
-            params: API별 요청 인자. ``crtfc_key``는 자동으로 추가된다.
-
-        Returns:
-            정상 OpenDART JSON 응답 딕셔너리.
-        """
 
         normalized_endpoint = endpoint.strip("/")
         if normalized_endpoint.startswith("api/"):
@@ -400,34 +393,32 @@ class OpenDartImportantClient:
             raise ValueError("OpenDART API 엔드포인트 파일명만 지정할 수 있습니다.")
         return await self._request_json(normalized_endpoint, params or {})
 
+    # 기업 고유번호 ZIP(``corpCode.xml``)을 반환
+    #
+    # Returns:
+    # ``CORPCODE.xml``을 포함한 ZIP 바이너리. 파일 저장은 호출자 책임
     async def get_corp_code_zip(self) -> bytes:
-        """기업 고유번호 ZIP(``corpCode.xml``)을 반환한다.
-
-        Returns:
-            ``CORPCODE.xml``을 포함한 ZIP 바이너리. 파일 저장은 호출자 책임이다.
-        """
 
         return await self._request_binary(CORP_CODE_ENDPOINT, {})
 
+    # 회사명을 CorpCode DB에서 찾아 단일 기업 정보를 반환
+    #
+    # Args:
+    # company_name: 사용자가 입력한 기업명.
+    # database_url: CorpCode MySQL의 선택적 SQLAlchemy URL.
+    # limit: 후보 검색 최대 개수.
+    #
+    # Returns:
+    # ``corp_code``, 기업명, 종목코드가 포함된 기업 정보 딕셔너리.
+    #
+    # Raises:
+    # LookupError: 일치하는 기업이 없거나 후보가 여러 개인 경우.
     async def resolve_company_name(
         self,
         company_name: str,
         database_url: str | None = None,
         limit: int = 10,
     ) -> dict[str, Any]:
-        """회사명을 CorpCode DB에서 찾아 단일 기업 정보를 반환한다.
-
-        Args:
-            company_name: 사용자가 입력한 기업명.
-            database_url: CorpCode MySQL의 선택적 SQLAlchemy URL.
-            limit: 후보 검색 최대 개수.
-
-        Returns:
-            ``corp_code``, 기업명, 종목코드가 포함된 기업 정보 딕셔너리.
-
-        Raises:
-            LookupError: 일치하는 기업이 없거나 후보가 여러 개인 경우.
-        """
 
         candidates = await find_corp_codes_by_name(
             company_name,
@@ -446,41 +437,39 @@ class OpenDartImportantClient:
             )
         return candidates[0]
 
+    # 기업개황(``company.json``)을 조회
+    #
+    # Args:
+    # corp_code: 기업 고유번호 8자리.
+    #
+    # Returns:
+    # 기업명, 대표자, 주소, 업종, 결산월 등이 담긴 원본 JSON 딕셔너리.
     async def get_company(self, corp_code: str) -> dict[str, Any]:
-        """기업개황(``company.json``)을 조회한다.
-
-        Args:
-            corp_code: 기업 고유번호 8자리.
-
-        Returns:
-            기업명, 대표자, 주소, 업종, 결산월 등이 담긴 원본 JSON 딕셔너리.
-        """
 
         return await self._request_json(
             COMPANY_ENDPOINT,
             {"corp_code": _require_corp_code(corp_code)},
         )
 
+    # 기업의 최신 정기보고서부터 과거 보고서 목록을 반환
+    #
+    # Args:
+    # corp_code: 기업 고유번호 8자리.
+    # history_count: 반환할 보고서 수. ``1``이면 최신 보고서만 반환
+    # database_url: 호환성용 인자, 미사용
+    #
+    # Returns:
+    # 정정공시를 하나로 합친 정기보고서 목록. 각 항목에는
+    # ``rcept_no``, ``report_nm``, ``rcept_dt``, ``reprt_code``,
+    # ``bsns_year``가 포함됨
     async def get_periodic_reports(
         self,
         corp_code: str,
         history_count: int = 1,
         database_url: str | None = None,
     ) -> list[dict[str, Any]]:
-        """기업의 최신 정기보고서부터 과거 보고서 목록을 반환한다.
 
-        Args:
-            corp_code: 기업 고유번호 8자리.
-            history_count: 반환할 보고서 수. ``1``이면 최신 보고서만 반환한다.
-            database_url: 이 함수에서는 호환성을 위해 받지만 사용하지 않는다.
-
-        Returns:
-            정정공시를 하나로 합친 정기보고서 목록. 각 항목에는
-            ``rcept_no``, ``report_nm``, ``rcept_dt``, ``reprt_code``,
-            ``bsns_year``가 포함된다.
-        """
-
-        del database_url  # 회사 식별은 resolve_company_name에서 수행한다.
+        del database_url  # 회사 식별은 resolve_company_name에서 수행
         _require_corp_code(corp_code)
         if history_count < 1:
             raise ValueError("history_count는 1 이상이어야 합니다.")
@@ -505,7 +494,7 @@ class OpenDartImportantClient:
             }
             key = (report["bsns_year"], reprt_code)
             previous = periodic.get(key)
-            # 같은 사업연도·보고서의 정정본 중 가장 최근 접수본만 유지한다.
+            # 같은 사업연도·보고서의 정정본 중 가장 최근 접수본만 유지
             if previous is None or (
                 str(report.get("rcept_no") or "")
                 > str(previous.get("rcept_no") or "")
@@ -522,6 +511,17 @@ class OpenDartImportantClient:
         )
         return reports[:history_count]
 
+    # 회사명으로 최신 재무보고서와 선택한 과거 보고서를 수집
+    #
+    # Args:
+    # company_name: CorpCode 조회용 회사명. corp_code 직접 입력 없음
+    # history_count: 최신 보고서를 포함해 가져올 보고서 수.
+    # fs_div: 재무제표 구분. ``CFS``는 연결, ``OFS``는 별도 재무제표
+    # database_url: CorpCode MySQL의 선택적 SQLAlchemy URL.
+    #
+    # Returns:
+    # 기업 식별정보와 보고서별 주요계정·재무지표·전체재무제표를 담은
+    # 중첩 딕셔너리. API 응답의 원본 필드도 보존
     async def get_company_financial_data(
         self,
         company_name: str,
@@ -529,18 +529,6 @@ class OpenDartImportantClient:
         fs_div: str = "CFS",
         database_url: str | None = None,
     ) -> dict[str, Any]:
-        """회사명으로 최신 재무보고서와 선택한 과거 보고서를 수집한다.
-
-        Args:
-            company_name: 사용자가 입력한 회사명. corp_code를 직접 받지 않는다.
-            history_count: 최신 보고서를 포함해 가져올 보고서 수.
-            fs_div: 재무제표 구분. ``CFS``는 연결, ``OFS``는 별도 재무제표다.
-            database_url: CorpCode MySQL의 선택적 SQLAlchemy URL.
-
-        Returns:
-            기업 식별정보와 보고서별 주요계정·재무지표·전체재무제표를 담은
-            중첩 딕셔너리. API 응답의 원본 필드도 보존한다.
-        """
 
         if fs_div not in FS_DIVISIONS:
             raise ValueError("fs_div는 'OFS' 또는 'CFS'여야 합니다.")
@@ -551,14 +539,14 @@ class OpenDartImportantClient:
         corp_code = company["corp_code"]
         reports = await self.get_periodic_reports(corp_code, history_count)
 
+        # 한 보고서에 대한 재무 API(지표·전체재무제표)를 병렬 수집
         async def collect(report: dict[str, Any]) -> dict[str, Any]:
-            """한 보고서에 대한 재무 API(지표·전체재무제표)를 병렬 수집한다."""
 
             report_code = report["reprt_code"]
             year = report["bsns_year"]
             # 최소 API 호출: fnlttSinglAcnt.json(주요계정)은 fnlttSinglAcntAll.json과
-            # 내용이 중복되고, normalize_account_item도 accounts_all만 사용하므로 생략한다.
-            # 필요하면 아래 줄의 주석을 해제해 다시 호출한다.
+            # 내용이 중복되고, normalize_account_item도 accounts_all만 사용하므로 생략
+            # 필요하면 아래 줄의 주석을 해제해 다시 호출
             # accounts = await self.get_single_accounts(corp_code, year, report_code)
             accounts = None
             indices, accounts_all = await asyncio.gather(
@@ -592,7 +580,7 @@ class OpenDartImportantClient:
                 "accounts": accounts,
                 "indices": index_payloads,
                 "accounts_all": accounts_all,
-                # 원본 응답은 보존하고, 보고서 작성에 바로 사용할 정규화 값도 제공한다.
+                # 원본 응답은 보존하고, 보고서 작성에 바로 사용할 정규화 값도 제공
                 "normalized_accounts": [
                     normalize_account_item(row, report)
                     for row in accounts_all.get("list", [])
@@ -609,8 +597,8 @@ class OpenDartImportantClient:
 
         report_data = await asyncio.gather(*(collect(report) for report in reports))
         # 최소 API 호출: 기업명·종목코드 등 식별 정보는 resolve_company_name()에서
-        # CorpCode DB로 이미 확보했으므로 company.json 호출을 생략한다.
-        # 대표자·업종·결산월 등 회사 개요가 필요하면 아래 줄의 주석을 해제한다.
+        # CorpCode DB로 이미 확보했으므로 company.json 호출을 생략
+        # 대표자·업종·결산월 등 회사 개요가 필요하면 아래 줄의 주석을 해제
         # company_detail = await self.get_company(corp_code)
         company_detail = None
         return {
@@ -619,6 +607,20 @@ class OpenDartImportantClient:
             "reports": list(report_data),
         }
 
+    # 공시검색(``list.json``) 결과를 조회
+    #
+    # Args:
+    # corp_code: 선택적 기업 고유번호 8자리.
+    # bgn_de/end_de: 접수일 검색 구간(``YYYYMMDD``).
+    # last_reprt_at: 최종보고서만 조회할 때 ``"Y"`` 또는 ``"N"``.
+    # pblntf_ty/pblntf_detail_ty: 공시유형·상세유형 코드.
+    # corp_cls: 법인구분(``Y``, ``K``, ``N``, ``E``).
+    # sort/sort_mth: 정렬 기준과 정렬 방식.
+    # page_no: 페이지 번호(1부터 시작).
+    # page_count: 페이지당 결과 수.
+    #
+    # Returns:
+    # ``status``, 페이지 정보, 공시 목록(``list``)을 포함한 딕셔너리.
     async def search_disclosures(
         self,
         corp_code: str | None = None,
@@ -633,21 +635,6 @@ class OpenDartImportantClient:
         page_no: int = 1,
         page_count: int = 100,
     ) -> dict[str, Any]:
-        """공시검색(``list.json``) 결과를 조회한다.
-
-        Args:
-            corp_code: 선택적 기업 고유번호 8자리.
-            bgn_de/end_de: 접수일 검색 구간(``YYYYMMDD``).
-            last_reprt_at: 최종보고서만 조회할 때 ``"Y"`` 또는 ``"N"``.
-            pblntf_ty/pblntf_detail_ty: 공시유형·상세유형 코드.
-            corp_cls: 법인구분(``Y``, ``K``, ``N``, ``E``).
-            sort/sort_mth: 정렬 기준과 정렬 방식.
-            page_no: 페이지 번호(1부터 시작).
-            page_count: 페이지당 결과 수.
-
-        Returns:
-            ``status``, 페이지 정보, 공시 목록(``list``)을 포함한 딕셔너리.
-        """
 
         if corp_code is not None:
             _require_corp_code(corp_code)
@@ -670,29 +657,39 @@ class OpenDartImportantClient:
             },
         )
 
+    # 단일회사 주요계정(``fnlttSinglAcnt.json``)을 조회
+    #
+    # Args:
+    # corp_code: 기업 고유번호 8자리.
+    # bsns_year: 사업연도 4자리.
+    # reprt_code: ``11013``(1분기), ``11012``(반기), ``11014``(3분기),
+    # ``11011``(사업보고서).
+    #
+    # Returns:
+    # 재무상태표·손익계산서 주요계정과 기간별 금액을 담은 딕셔너리.
     async def get_single_accounts(
         self,
         corp_code: str,
         bsns_year: str,
         reprt_code: str,
     ) -> dict[str, Any]:
-        """단일회사 주요계정(``fnlttSinglAcnt.json``)을 조회한다.
-
-        Args:
-            corp_code: 기업 고유번호 8자리.
-            bsns_year: 사업연도 4자리.
-            reprt_code: ``11013``(1분기), ``11012``(반기), ``11014``(3분기),
-                ``11011``(사업보고서).
-
-        Returns:
-            재무상태표·손익계산서 주요계정과 기간별 금액을 담은 딕셔너리.
-        """
 
         return await self._request_json(
             SINGLE_ACCOUNT_ENDPOINT,
             _require_report_params(corp_code, bsns_year, reprt_code),
         )
 
+    # 단일회사 주요 재무지표(``fnlttSinglIndx.json``)를 조회
+    #
+    # Args:
+    # corp_code: 기업 고유번호 8자리.
+    # bsns_year: 사업연도 4자리.
+    # reprt_code: 보고서 코드(``11013``, ``11012``, ``11014``, ``11011``).
+    # idx_cl_code: 지표분류코드. 수익성 ``M210000``, 안정성 ``M220000``,
+    # 성장성 ``M230000``, 활동성 ``M240000``.
+    #
+    # Returns:
+    # 공식 재무지표 목록을 포함한 딕셔너리.
     async def get_single_indices(
         self,
         corp_code: str,
@@ -700,18 +697,6 @@ class OpenDartImportantClient:
         reprt_code: str,
         idx_cl_code: str,
     ) -> dict[str, Any]:
-        """단일회사 주요 재무지표(``fnlttSinglIndx.json``)를 조회한다.
-
-        Args:
-            corp_code: 기업 고유번호 8자리.
-            bsns_year: 사업연도 4자리.
-            reprt_code: 보고서 코드(``11013``, ``11012``, ``11014``, ``11011``).
-            idx_cl_code: 지표분류코드. 수익성 ``M210000``, 안정성 ``M220000``,
-                성장성 ``M230000``, 활동성 ``M240000``.
-
-        Returns:
-            공식 재무지표 목록을 포함한 딕셔너리.
-        """
 
         if not idx_cl_code:
             raise ValueError("idx_cl_code는 필수입니다.")
@@ -723,6 +708,16 @@ class OpenDartImportantClient:
             },
         )
 
+    # 단일회사 전체 재무제표(``fnlttSinglAcntAll.json``)를 조회
+    #
+    # Args:
+    # corp_code: 기업 고유번호 8자리.
+    # bsns_year: 사업연도 4자리.
+    # reprt_code: 보고서 코드.
+    # fs_div: ``OFS``(별도) 또는 ``CFS``(연결).
+    #
+    # Returns:
+    # BS, IS, CIS, CF, SCE 계정과 기간별 금액을 포함한 딕셔너리.
     async def get_single_accounts_all(
         self,
         corp_code: str,
@@ -730,17 +725,6 @@ class OpenDartImportantClient:
         reprt_code: str,
         fs_div: str,
     ) -> dict[str, Any]:
-        """단일회사 전체 재무제표(``fnlttSinglAcntAll.json``)를 조회한다.
-
-        Args:
-            corp_code: 기업 고유번호 8자리.
-            bsns_year: 사업연도 4자리.
-            reprt_code: 보고서 코드.
-            fs_div: ``OFS``(별도) 또는 ``CFS``(연결).
-
-        Returns:
-            BS, IS, CIS, CF, SCE 계정과 기간별 금액을 포함한 딕셔너리.
-        """
 
         if fs_div not in FS_DIVISIONS:
             raise ValueError("fs_div는 'OFS' 또는 'CFS'여야 합니다.")
@@ -752,26 +736,25 @@ class OpenDartImportantClient:
             },
         )
 
+    # 공시 원문을 ZIP 바이너리로 반환
+    #
+    # Args:
+    # rcept_no: 공시검색 API에서 받은 접수번호 14자리.
+    #
+    # Returns:
+    # 공시 원문 ZIP 바이너리. 파일 저장·압축 해제는 호출자 책임
     async def get_document(self, rcept_no: str) -> bytes:
-        """공시 원문을 ZIP 바이너리로 반환한다.
-
-        Args:
-            rcept_no: 공시검색 API에서 받은 접수번호 14자리.
-
-        Returns:
-            공시 원문 ZIP 바이너리. 파일 저장·압축 해제는 호출자 책임이다.
-        """
 
         if len(rcept_no) != 14 or not rcept_no.isdigit():
             raise ValueError("rcept_no는 숫자 14자리여야 합니다.")
         try:
-            # 현재 실서버에서 정상적으로 ZIP을 반환하는 XML 출력 형식을 우선 사용한다.
+            # 현재 실서버에서 정상적으로 ZIP을 반환하는 XML 출력 형식을 우선 사용
             return await self._request_binary(
                 DOCUMENT_ENDPOINT,
                 {"rcept_no": rcept_no},
             )
         except OpenDartApiError as exc:
-            # 서버 설정에 따라 JSON 출력 형식만 허용되는 경우를 대비한다.
+            # 서버 설정에 따라 JSON 출력 형식만 허용되는 경우를 대비
             if exc.status not in {"101", "014"}:
                 raise
             return await self._request_binary(
@@ -779,28 +762,44 @@ class OpenDartImportantClient:
                 {"rcept_no": rcept_no},
             )
 
+    # 회사간 주요계정 비교(``fnlttMultiAcnt.json``) 결과를 조회
+    #
+    # Args:
+    # corp_code: 비교 대상 공시회사 고유번호 8자리.
+    # bsns_year: 비교할 사업연도 4자리.
+    # reprt_code: 비교할 보고서 코드.
+    #
+    # Returns:
+    # 회사간 주요계정 비교 목록과 원본 응답 상태를 담은 딕셔너리.
     async def get_multi_accounts(
         self,
         corp_code: str,
         bsns_year: str,
         reprt_code: str,
     ) -> dict[str, Any]:
-        """회사간 주요계정 비교(``fnlttMultiAcnt.json``) 결과를 조회한다.
-
-        Args:
-            corp_code: 비교 대상 공시회사 고유번호 8자리.
-            bsns_year: 비교할 사업연도 4자리.
-            reprt_code: 비교할 보고서 코드.
-
-        Returns:
-            회사간 주요계정 비교 목록과 원본 응답 상태를 담은 딕셔너리.
-        """
 
         return await self._request_json(
             MULTI_ACCOUNT_ENDPOINT,
             _require_report_params(corp_code, bsns_year, reprt_code),
         )
 
+    # 회사간 주요 재무지표 비교 API를 조회
+    #
+    # Args:
+    # corp_code: 비교 대상 공시회사 고유번호 8자리.
+    # bsns_year: 비교할 사업연도 4자리.
+    # reprt_code: 비교할 보고서 코드.
+    # stacnt_code: 회사간 재무지표 요청의 기준 코드.
+    # idx_cl_code: 수익성 ``M210000``, 안정성 ``M220000``,
+    # 성장성 ``M230000``, 활동성 ``M240000``.
+    #
+    # Returns:
+    # 회사간 재무지표 비교 결과 딕셔너리.
+    #
+    # Note:
+    # OpenDART 공식 현재 엔드포인트는 ``fnlttCmpnyIndx.json``
+    # ImportantList.md의 ``fnlttMultiIndx`` 표기는 이 메서드에서 공식
+    # 엔드포인트로 매핑
     async def get_multi_indices(
         self,
         corp_code: str,
@@ -809,24 +808,6 @@ class OpenDartImportantClient:
         stacnt_code: str = "M210000",
         idx_cl_code: str = "M210000",
     ) -> dict[str, Any]:
-        """회사간 주요 재무지표 비교 API를 조회한다.
-
-        Args:
-            corp_code: 비교 대상 공시회사 고유번호 8자리.
-            bsns_year: 비교할 사업연도 4자리.
-            reprt_code: 비교할 보고서 코드.
-            stacnt_code: 회사간 재무지표 요청의 기준 코드.
-            idx_cl_code: 수익성 ``M210000``, 안정성 ``M220000``,
-                성장성 ``M230000``, 활동성 ``M240000``.
-
-        Returns:
-            회사간 재무지표 비교 결과 딕셔너리.
-
-        Note:
-            OpenDART 공식 현재 엔드포인트는 ``fnlttCmpnyIndx.json``이다.
-            ImportantList.md의 ``fnlttMultiIndx`` 표기는 이 메서드에서 공식
-            엔드포인트로 매핑한다.
-        """
 
         if not stacnt_code or not idx_cl_code:
             raise ValueError("stacnt_code와 idx_cl_code는 필수입니다.")
@@ -839,34 +820,32 @@ class OpenDartImportantClient:
             },
         )
 
+    # XBRL 재무제표 계정 체계(``xbrlTaxonomy.json``)를 조회
+    #
+    # Args:
+    # sj_div: 재무제표 구분 코드. 예: ``BS1``, ``IS1``, ``CF1``, ``SCE1``.
+    #
+    # Returns:
+    # 계정 ID, 계정명, 한·영 표시명, 데이터 유형을 포함한 딕셔너리.
     async def get_xbrl_taxonomy(self, sj_div: str) -> dict[str, Any]:
-        """XBRL 재무제표 계정 체계(``xbrlTaxonomy.json``)를 조회한다.
-
-        Args:
-            sj_div: 재무제표 구분 코드. 예: ``BS1``, ``IS1``, ``CF1``, ``SCE1``.
-
-        Returns:
-            계정 ID, 계정명, 한·영 표시명, 데이터 유형을 포함한 딕셔너리.
-        """
 
         if not sj_div:
             raise ValueError("sj_div는 필수입니다.")
         return await self._request_json(XBRL_TAXONOMY_ENDPOINT, {"sj_div": sj_div})
 
+    # XBRL 원본(``fnlttXbrl.xml``) ZIP을 반환
+    #
+    # Args:
+    # rcept_no: 공시검색 결과의 접수번호. OpenDART 원문 규격상 숫자 값
+    # reprt_code: 보고서 코드.
+    #
+    # Returns:
+    # XBRL 원본 파일이 담긴 ZIP 바이너리.
     async def get_xbrl_file(
         self,
         rcept_no: str,
         reprt_code: str,
     ) -> bytes:
-        """XBRL 원본(``fnlttXbrl.xml``) ZIP을 반환한다.
-
-        Args:
-            rcept_no: 공시검색 결과의 접수번호. OpenDART 원문 규격상 숫자 값이다.
-            reprt_code: 보고서 코드.
-
-        Returns:
-            XBRL 원본 파일이 담긴 ZIP 바이너리.
-        """
 
         if not rcept_no.isdigit():
             raise ValueError("rcept_no는 숫자 문자열이어야 합니다.")
@@ -878,26 +857,36 @@ class OpenDartImportantClient:
         )
 
 
+# MCP에서 동적으로 ImportantList JSON API를 호출할 수 있는 진입점.
+#
+# Args:
+# endpoint: ``company.json`` 또는 ``/api/company.json`` 같은 엔드포인트.
+# params: API별 파라미터. 인증키(``crtfc_key``)는 자동으로 추가됨
+# api_key: 선택적 OpenDART 인증키.
+#
+# Returns:
+# OpenDART 정상 JSON 응답 딕셔너리.
 async def call_important_api(
     endpoint: str,
     params: Mapping[str, str | int | None] | None = None,
     api_key: str | None = None,
 ) -> dict[str, Any]:
-    """MCP에서 동적으로 ImportantList JSON API를 호출할 수 있는 진입점.
-
-    Args:
-        endpoint: ``company.json`` 또는 ``/api/company.json`` 같은 엔드포인트.
-        params: API별 파라미터. 인증키(``crtfc_key``)는 자동으로 추가된다.
-        api_key: 선택적 OpenDART 인증키.
-
-    Returns:
-        OpenDART 정상 JSON 응답 딕셔너리.
-    """
 
     async with OpenDartImportantClient(api_key=api_key) as client:
         return await client.call_json_api(endpoint, params)
 
 
+# MCP에서 회사명으로 최신·과거 재무보고서를 바로 조회하는 진입점.
+#
+# Args:
+# company_name: 사용자가 전달한 회사명.
+# history_count: 최신 보고서 포함 과거 보고서 개수.
+# fs_div: ``CFS``(연결) 또는 ``OFS``(별도).
+# api_key: 선택적 OpenDART 인증키.
+# database_url: 선택적 CorpCode MySQL URL.
+#
+# Returns:
+# CorpCode 식별정보, 기업개황, 보고서별 재무 API 원본 응답을 포함한 딕셔너리.
 async def get_company_financial_data(
     company_name: str,
     history_count: int = 1,
@@ -905,18 +894,6 @@ async def get_company_financial_data(
     api_key: str | None = None,
     database_url: str | None = None,
 ) -> dict[str, Any]:
-    """MCP에서 회사명으로 최신·과거 재무보고서를 바로 조회하는 진입점.
-
-    Args:
-        company_name: 사용자가 전달한 회사명.
-        history_count: 최신 보고서 포함 과거 보고서 개수.
-        fs_div: ``CFS``(연결) 또는 ``OFS``(별도).
-        api_key: 선택적 OpenDART 인증키.
-        database_url: 선택적 CorpCode MySQL URL.
-
-    Returns:
-        CorpCode 식별정보, 기업개황, 보고서별 재무 API 원본 응답을 포함한 딕셔너리.
-    """
 
     async with OpenDartImportantClient(api_key=api_key) as client:
         return await client.get_company_financial_data(

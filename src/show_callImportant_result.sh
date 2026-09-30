@@ -56,7 +56,7 @@ async def main():
         history_count=args.history_count,
         fs_div=args.fs_div,
     )
-    # API 인증키는 반환 데이터에 포함하지 않으며, 반환된 회사·재무자료만 출력한다.
+    # 인증키 제외, 회사·재무자료만 출력
     json.dump(result, sys.stdout, ensure_ascii=False, indent=2, default=str)
     sys.stdout.write("\n")
 
@@ -67,7 +67,7 @@ except OpenDartApiError as exc:
     print(f"OpenDART API 오류 (status={exc.status}): {exc.message}", file=sys.stderr)
     raise SystemExit(1)
 except Exception as exc:
-    # 예외 문자열에 요청 URL 또는 인증 정보가 포함될 수 있어 유형만 표시한다.
+    # URL·인증 정보 보호를 위해 예외 유형만 표시
     print(f"조회 실패: {type(exc).__name__}", file=sys.stderr)
     raise SystemExit(1)
 PY
