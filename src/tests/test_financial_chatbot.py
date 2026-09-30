@@ -7,6 +7,7 @@ import os
 import sys
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -292,6 +293,53 @@ class FinancialPDFTests(unittest.TestCase):
                         financial_analysis="", key_metrics="", caveats="", sources="",
                     )
             self.assertEqual(list(Path(temp_dir).iterdir()), [])
+
+
+class FinancialPDFChartTests(unittest.TestCase):
+    def test_chart_pages_and_download_filename(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="financial-report-test-") as temp_dir:
+            with patch.object(pdf_report, "REPORT_DIR", Path(temp_dir)):
+                result = pdf_report.generate_financial_report_pdf(
+                    company_name="삼성전자",
+                    report_period="2025년 사업보고서",
+                    executive_summary="재무 요약",
+                    financial_analysis="재무 분석",
+                    key_metrics="매출액: 100조원",
+                    caveats="주의사항",
+                    sources="OpenDART",
+                )
+            output_path = Path(temp_dir) / f"{result['report_id']}.pdf"
+            added = pdf_report.append_financial_charts_to_pdf(
+                output_path,
+                [{
+                    "company_name": "삼성전자",
+                    "report_name": "2025년 사업보고서",
+                    "financial_position": [
+                        {"label": "자산", "value_trillion": 500.0},
+                        {"label": "부채", "value_trillion": 100.0},
+                        {"label": "자본", "value_trillion": 400.0},
+                    ],
+                    "profitability": [
+                        {"label": "매출", "value_trillion": 300.0},
+                        {"label": "영업이익", "value_trillion": 30.0},
+                    ],
+                }],
+            )
+
+            self.assertEqual(added, 1)
+            with pymupdf.open(output_path) as document:
+                self.assertEqual(len(document), 2)
+                text = "\n".join(page.get_text() for page in document)
+                self.assertIn("재무정보", text)
+                self.assertIn("영업이익", text)
+                self.assertIn("1 / 2", text)
+                self.assertIn("2 / 2", text)
+
+        generated_at = datetime(2026, 9, 30, 15, 11).astimezone()
+        self.assertEqual(
+            pdf_report.build_download_filename("삼성전자", "3. 일반인", generated_at),
+            "삼성전자_일반인_2609301511.pdf",
+        )
 
 
 if __name__ == "__main__":

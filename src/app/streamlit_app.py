@@ -19,7 +19,11 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from app.agent import create_financial_agent_graph
-from app.pdf_report import REPORT_DIR
+from app.pdf_report import (
+    REPORT_DIR,
+    append_financial_charts_to_pdf,
+    build_download_filename,
+)
 # from app.prompts import UNDERSTANDING_LEVELS
 from app.compressed_prompts import UNDERSTANDING_LEVELS
 from app.chart_data import extract_latest_chart_data_list
@@ -47,17 +51,39 @@ def _message_text(content) -> str:
     return str(content or "")
 
 
-def _remember_pdf_outputs(messages) -> None:
+def _remember_pdf_outputs(messages, fallback_chart_data=()) -> None:
     """MCP PDF 도구 결과에서 다운로드 ID와 파일명을 보관한다."""
     marker = re.compile(r"PDF_READY:([0-9a-f]{32}):([A-Za-z0-9가-힣_.-]+\.pdf)")
-    for message in messages:
+    for message in reversed(list(messages)):
         if isinstance(message, ToolMessage):
             match = marker.search(_message_text(message.content))
             if match:
+                report_id, internal_filename = match.groups()
+                latest_pdf = st.session_state.get("latest_pdf")
+                if latest_pdf and latest_pdf.get("report_id") == report_id:
+                    return
+
+                chart_data = extract_latest_chart_data_list(messages) or list(fallback_chart_data)
+                pdf_path = REPORT_DIR / f"{report_id}.pdf"
+                if chart_data and pdf_path.is_file():
+                    try:
+                        append_financial_charts_to_pdf(pdf_path, chart_data)
+                    except Exception as exc:
+                        st.warning(f"PDF 그래프 추가에 실패했습니다 ({type(exc).__name__}).")
+
+                company_name = (
+                    chart_data[0].get("company_name")
+                    if chart_data
+                    else internal_filename.split("_financial_report_", 1)[0]
+                )
                 st.session_state.latest_pdf = {
-                    "report_id": match.group(1),
-                    "filename": match.group(2),
+                    "report_id": report_id,
+                    "filename": build_download_filename(
+                        str(company_name or "기업"),
+                        st.session_state.get("understanding_level", "3. 일반인"),
+                    ),
                 }
+                return
 
 def _metric_map(chart_data: dict, section: str) -> dict:
     return {row["metric"]: row for row in chart_data.get(section, [])}
@@ -320,7 +346,10 @@ if user_input:
             if final_message is not None:
                 st.markdown(_message_text(final_message.content))
         st.session_state.agent_messages = state["messages"]
-        _remember_pdf_outputs(state["messages"])
+        _remember_pdf_outputs(
+            state["messages"],
+            fallback_chart_data=extract_latest_chart_data_list(messages),
+        )
         st.rerun()
     except Exception as exc:
         # 모델·MCP 예외에 URL이나 설정값이 포함될 수 있어 사용자 화면에는 유형만 표시한다.

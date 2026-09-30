@@ -406,3 +406,89 @@ def generate_financial_report_pdf(
         "filename": filename,
         "download_token": f"PDF_READY:{report_id}:{filename}",
     }
+
+
+def build_download_filename(
+    company_name: str,
+    understanding_level: str,
+    generated_at: datetime | None = None,
+) -> str:
+    """선택 수준과 생성 시각을 포함한 다운로드용 파일명을 만든다."""
+    level = re.sub(r"^\d+\.\s*", "", understanding_level)
+    timestamp = (generated_at or datetime.now().astimezone()).strftime("%y%m%d%H%M")
+    return f"{_safe_company_slug(company_name)}_{_safe_company_slug(level)}_{timestamp}.pdf"
+
+
+def append_financial_charts_to_pdf(
+    pdf_path: str | Path,
+    companies: Iterable[dict],
+) -> int:
+    """챗봇에서 사용한 정규화 차트 데이터를 PDF 부록 그래프로 추가한다."""
+    chart_data = [item for item in companies if isinstance(item, dict)]
+    if not chart_data:
+        return 0
+
+    document = fitz.open(pdf_path)
+    for company in chart_data:
+        page = document.new_page(width=PAGE_WIDTH, height=PAGE_HEIGHT)
+        page.insert_font(fontname=FONT_NAME, fontfile=str(FONT_FILE))
+        company_name = str(company.get("company_name") or "기업")
+        report_name = str(company.get("report_name") or "보고서 기준 정보 없음")
+        page.draw_rect(fitz.Rect(0, 0, PAGE_WIDTH, 112), color=NAVY, fill=NAVY)
+        page.insert_text((LEFT_MARGIN, 42), "FINANCIAL CHARTS", fontsize=9,
+                         fontname=FONT_NAME, color=(0.79, 0.86, 0.94))
+        page.insert_text((LEFT_MARGIN, 76), f"{company_name} 재무정보", fontsize=19,
+                         fontname=FONT_NAME, color=WHITE)
+        page.insert_text((LEFT_MARGIN, 98), report_name, fontsize=9,
+                         fontname=FONT_NAME, color=(0.79, 0.86, 0.94))
+
+        def draw_group(title: str, rows: list[dict], top: float) -> None:
+            page.insert_text((LEFT_MARGIN, top), title, fontsize=13,
+                             fontname=FONT_NAME, color=NAVY)
+            valid_rows = [row for row in rows if isinstance(row, dict)]
+            values = [float(row.get("value_trillion", 0) or 0) for row in valid_rows]
+            if not valid_rows:
+                page.insert_text((LEFT_MARGIN, top + 28), "차트에 사용할 값이 없습니다.",
+                                 fontsize=9, fontname=FONT_NAME, color=MUTED)
+                return
+            low, high = min(0.0, min(values)), max(0.0, max(values))
+            if high == low:
+                high = low + 1.0
+            chart_left, chart_right = LEFT_MARGIN + 132, PAGE_WIDTH - RIGHT_MARGIN - 78
+            zero_x = chart_left + (0 - low) / (high - low) * (chart_right - chart_left)
+            page.draw_line((zero_x, top + 14), (zero_x, top + 22 + 34 * len(valid_rows)),
+                           color=BORDER, width=0.7)
+            for index, (row, value) in enumerate(zip(valid_rows, values)):
+                y = top + 42 + index * 34
+                label = str(row.get("label") or row.get("metric") or "지표")
+                end_x = chart_left + (value - low) / (high - low) * (chart_right - chart_left)
+                page.insert_text((LEFT_MARGIN, y + 4), label, fontsize=9,
+                                 fontname=FONT_NAME, color=TEXT)
+                page.draw_rect(fitz.Rect(min(zero_x, end_x), y - 7,
+                                         max(zero_x, end_x), y + 7),
+                               color=BLUE, fill=BLUE)
+                page.insert_text((chart_right + 8, y + 4), f"{value:,.1f}조",
+                                 fontsize=8.5, fontname=FONT_NAME, color=TEXT)
+
+        draw_group("재무상태 · 조원", company.get("financial_position", []), 170)
+        draw_group("손익 · 조원", company.get("profitability", []), 390)
+
+    total_pages = len(document)
+    for page_number, page in enumerate(document, start=1):
+        # 기존 페이지 번호를 새 부록을 포함한 전체 쪽수로 갱신한다.
+        page.add_redact_annot(
+            fitz.Rect(PAGE_WIDTH - RIGHT_MARGIN - 52, PAGE_HEIGHT - 34,
+                      PAGE_WIDTH - RIGHT_MARGIN + 4, PAGE_HEIGHT - 15),
+            fill=WHITE,
+        )
+        page.apply_redactions()
+        page.insert_text((PAGE_WIDTH - RIGHT_MARGIN - 48, PAGE_HEIGHT - 23),
+                         f"{page_number} / {total_pages}", fontsize=8,
+                         fontname=FONT_NAME, color=MUTED)
+        if page_number > total_pages - len(chart_data):
+            page.draw_line((LEFT_MARGIN, PAGE_HEIGHT - 39),
+                           (PAGE_WIDTH - RIGHT_MARGIN, PAGE_HEIGHT - 39),
+                           color=BORDER, width=0.7)
+    document.saveIncr()
+    document.close()
+    return len(chart_data)
