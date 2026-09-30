@@ -18,14 +18,18 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 import pymupdf
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.outputs import ChatGeneration, ChatResult
+from langchain_core.tools import StructuredTool
+from pydantic import Field
 
 from app import mcp_tools
 from app.prompts import UNDERSTANDING_LEVELS, build_financial_system_prompt
 from app import pdf_report
 
 
-class FinancialPromptTests(unittest.TestCase):
+class FinancialPromptTests(unittest.IsolatedAsyncioTestCase):
     def test_each_level_has_a_distinct_prompt_with_required_tool_guidance(self) -> None:
         prompts = [build_financial_system_prompt(level) for level in UNDERSTANDING_LEVELS]
 
@@ -40,34 +44,94 @@ class FinancialPromptTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             build_financial_system_prompt("5. 회계사")
 
-    def test_agent_uses_default_model_parameters_without_temperature_override(self) -> None:
-        import app.agent as agent_module
+    async def test_create_agent_runs_mcp_shaped_tool_serially_with_system_prompt(self) -> None:
+        from app import agent as agent_module
 
-        class FakeBoundModel:
-            def bind_tools(self, tools, **kwargs):
+        tool_calls: list[str] = []
+
+        def fake_financial_lookup(company_name: str) -> str:
+            tool_calls.append(company_name)
+            return json.dumps({"company_name": company_name, "revenue": 100})
+
+        financial_tool = StructuredTool.from_function(
+            func=fake_financial_lookup,
+            name="get_company_financial_data",
+            description="Return financial data for a company.",
+        )
+
+        model_instances: list[BaseChatModel] = []
+        model_init_kwargs: list[dict[str, object]] = []
+
+        class FakeChatOpenAI(BaseChatModel):
+            model: str = "offline-test-model"
+            bound_tool_names: list[str] = Field(default_factory=list)
+            bind_calls: list[dict[str, object]] = Field(default_factory=list)
+            received_messages: list[list[BaseMessage]] = Field(default_factory=list)
+            responses: list[AIMessage] = Field(
+                default_factory=lambda: [
+                    AIMessage(
+                        content="",
+                        tool_calls=[
+                            {
+                                "name": "get_company_financial_data",
+                                "args": {"company_name": "테스트기업"},
+                                "id": "call-financial-1",
+                                "type": "tool_call",
+                            }
+                        ],
+                    ),
+                    AIMessage(content="매출은 100입니다."),
+                ]
+            )
+
+            def __init__(self, **kwargs):
+                model_init_kwargs.append(dict(kwargs))
+                super().__init__(**kwargs)
+                model_instances.append(self)
+
+            def bind_tools(self, tools, *, tool_choice=None, **kwargs):
+                self.bound_tool_names = [tool.name for tool in tools]
+                self.bind_calls.append({"tool_choice": tool_choice, **kwargs})
                 return self
 
-            def invoke(self, messages):
-                return AIMessage(content="offline response")
+            def _generate(
+                self,
+                messages: list[BaseMessage],
+                stop: list[str] | None = None,
+                run_manager=None,
+                **kwargs,
+            ) -> ChatResult:
+                self.received_messages.append(list(messages))
+                return ChatResult(
+                    generations=[ChatGeneration(message=self.responses.pop(0))]
+                )
 
-        class FakeChatOpenAI:
-            def __init__(self, **kwargs):
-                self.kwargs = kwargs
-                self.bound_model = FakeBoundModel()
-                self_instances.append(self)
+            @property
+            def _llm_type(self) -> str:
+                return "offline-fake-chat-openai"
 
-            def bind_tools(self, tools, **kwargs):
-                return self.bound_model
-
-        self_instances = []
+        system_prompt = "Use financial data tools before answering."
         with patch.object(agent_module, "ChatOpenAI", FakeChatOpenAI):
-            graph = agent_module._compile_agent("offline system prompt", [])
-            result = graph.invoke({"messages": [HumanMessage(content="offline question")]})
+            agent = agent_module._compile_agent(system_prompt, [financial_tool])
+            result = await agent.ainvoke(
+                {"messages": [HumanMessage(content="테스트기업 매출을 알려줘.")]}
+            )
 
-        self.assertEqual(len(self_instances), 1)
-        self.assertNotIn("temperature", self_instances[0].kwargs)
-        self.assertEqual(result["messages"][-1].content, "offline response")
-
+        model = model_instances[-1]
+        self.assertNotIn("temperature", model_init_kwargs[-1])
+        self.assertEqual(result["messages"][-1].content, "매출은 100입니다.")
+        self.assertEqual(tool_calls, ["테스트기업"])
+        self.assertIn(system_prompt, model.received_messages[0][0].content)
+        self.assertEqual(model.bound_tool_names, ["get_company_financial_data"])
+        self.assertTrue(model.bind_calls)
+        self.assertTrue(
+            all(call.get("parallel_tool_calls") is False for call in model.bind_calls)
+        )
+        tool_result_messages = [
+            message for message in result["messages"] if message.type == "tool"
+        ]
+        self.assertEqual(len(tool_result_messages), 1)
+        self.assertIn('"revenue": 100', tool_result_messages[0].content)
 
 class FinancialMCPToolTests(unittest.IsolatedAsyncioTestCase):
     async def test_company_name_tool_forwards_arguments_and_serializes_result(self) -> None:
